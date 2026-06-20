@@ -1,0 +1,8 @@
+{"i": 0, "score": 0.11674656036272414, "wall_s": 177.66792607307434, "detail": {"returncode": 0, "wall_s": 177.6641709804535, "forget_quality": 0.1163, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 1, "score": 0.11604427301860137, "wall_s": 176.8556821346283, "detail": {"returncode": 0, "wall_s": 176.8549828529358, "forget_quality": 0.1156, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 2, "score": 0.11654593483855705, "wall_s": 179.03952407836914, "detail": {"returncode": 0, "wall_s": 179.0382478237152, "forget_quality": 0.1161, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 3, "score": 0.11702240820726166, "wall_s": 177.7248499393463, "detail": {"returncode": 0, "wall_s": 177.72396516799927, "forget_quality": 0.1166, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 4, "score": 0.11724836919698672, "wall_s": 620.9142100811005, "detail": {"returncode": 0, "wall_s": 620.9132308959961, "forget_quality": 0.1168, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 5, "score": 0.11663365337501508, "wall_s": 184.97699117660522, "detail": {"returncode": 0, "wall_s": 184.97580790519714, "forget_quality": 0.1162, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 6, "score": 0.11717295085754043, "wall_s": 181.37034797668457, "detail": {"returncode": 0, "wall_s": 181.3692591190338, "forget_quality": 0.1168, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}
+{"i": 7, "score": 0.11665879282149717, "wall_s": 178.28330397605896, "detail": {"returncode": 0, "wall_s": 178.28224802017212, "forget_quality": 0.1162, "retain_ratio": 1.0026, "test_ratio": 1.001, "score_source": "npz"}}

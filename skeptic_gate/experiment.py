@@ -1,0 +1,132 @@
+"""Experiment drivers that PERSIST results to skeptic_gate/results/ so every
+figure is regenerated from logged numbers (HANDOFF step 19, no hand-edited data).
+
+Two experiments:
+  1. regime_grid     -- arms x sigma x p_good x outer-seeds, both world variants.
+                        Feeds the 2D regime heatmap + the 1D crossover curves.
+  2. replication_audit -- run the greedy arm, take every change it ACCEPTED, re-run
+                        each R times, report how many "improvements" survive
+                        re-testing (HANDOFF step 14, the centerpiece).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import numpy as np
+
+from synthetic import SyntheticConfig, run_arm
+
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+ARMS = ["greedy", "causal"]
+SIGMAS = [0.005, 0.01, 0.02, 0.04, 0.06, 0.08, 0.12, 0.16, 0.24]
+P_GOODS = [0.05, 0.10, 0.20, 0.35, 0.50]
+WORLDS = {"unbounded": None, "ceiling": 0.5}
+
+
+# ---------------------------------------------------------------------------
+# 1. Regime grid
+# ---------------------------------------------------------------------------
+
+def regime_grid(budget: float = 120.0, n_outer: int = 40) -> dict:
+    cells = []
+    for world_name, ceiling in WORLDS.items():
+        for sigma in SIGMAS:
+            for p_good in P_GOODS:
+                cfg = SyntheticConfig(sigma=sigma, p_good=p_good, ceiling=ceiling)
+                row = {"world": world_name, "sigma": sigma, "p_good": p_good}
+                for arm in ARMS:
+                    rs = [run_arm(arm, cfg, budget, s) for s in range(n_outer)]
+                    T = np.array([r.true_performance for r in rs])
+                    fa = np.array([r.n_false_accepts for r in rs])
+                    acc = np.array([r.n_accepted for r in rs])
+                    row[f"{arm}_T_mean"] = float(T.mean())
+                    row[f"{arm}_T_se"] = float(T.std(ddof=1) / np.sqrt(n_outer))
+                    row[f"{arm}_false_mean"] = float(fa.mean())
+                    row[f"{arm}_accepted_mean"] = float(acc.mean())
+                row["causal_minus_greedy_T"] = row["causal_T_mean"] - row["greedy_T_mean"]
+                cells.append(row)
+    out = {"meta": {"budget": budget, "n_outer": n_outer, "arms": ARMS,
+                    "sigmas": SIGMAS, "p_goods": P_GOODS, "worlds": list(WORLDS)},
+           "cells": cells}
+    path = os.path.join(RESULTS_DIR, "regime_grid.json")
+    with open(path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"[regime_grid] wrote {len(cells)} cells -> {path}")
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 2. Replication audit
+# ---------------------------------------------------------------------------
+
+def replication_audit(sigma: float = 0.08, p_good: float = 0.25,
+                      ceiling=0.5, budget: float = 120.0,
+                      n_outer: int = 30, R: int = 20, z: float = 1.0) -> dict:
+    """Run greedy; for every accepted change, re-evaluate it R times and test
+    whether the improvement survives (mirrors re-running a kept experiment).
+
+    'survives_replication': replicated paired effect clears the ~z-SE band.
+    'survives_truth': the change's realized effect was actually > 0 (ground truth).
+    These should closely agree, validating the replication test itself.
+    """
+    cfg = SyntheticConfig(sigma=sigma, p_good=p_good, ceiling=ceiling)
+    rng = np.random.default_rng(12345)
+
+    kept = surv_rep = surv_truth = 0
+    by_kind: dict[str, dict] = {}
+    per_seed = []
+
+    for s in range(n_outer):
+        _, world = run_arm("greedy", cfg, budget, s, return_world=True)
+        recs = world.accepted_records
+        k_seed = sr_seed = st_seed = 0
+        for rec in recs:
+            kept += 1
+            k_seed += 1
+            realized = rec["realized_delta"]
+            # re-evaluate R times: paired (candidate - baseline) measurements.
+            # each measurement carries fresh independent noise of scale sigma.
+            noise = rng.normal(0.0, sigma, size=(R, 2))
+            effects = realized + noise[:, 0] - noise[:, 1]
+            mean_eff = effects.mean()
+            se = effects.std(ddof=1) / np.sqrt(R)
+            survives = (mean_eff - z * se) > 0
+            truth = realized > 0
+            surv_rep += int(survives); sr_seed += int(survives)
+            surv_truth += int(truth); st_seed += int(truth)
+
+            bk = by_kind.setdefault(rec["kind"], {"kept": 0, "surv_rep": 0, "surv_truth": 0})
+            bk["kept"] += 1
+            bk["surv_rep"] += int(survives)
+            bk["surv_truth"] += int(truth)
+        per_seed.append({"seed": s, "kept": k_seed, "surv_rep": sr_seed, "surv_truth": st_seed})
+
+    out = {
+        "meta": {"sigma": sigma, "p_good": p_good, "ceiling": ceiling,
+                 "budget": budget, "n_outer": n_outer, "R": R, "z": z},
+        "kept": kept,
+        "survive_replication": surv_rep,
+        "survive_truth": surv_truth,
+        "vanish_replication": kept - surv_rep,
+        "frac_vanish_replication": (kept - surv_rep) / kept if kept else None,
+        "by_kind": by_kind,
+        "per_seed": per_seed,
+    }
+    path = os.path.join(RESULTS_DIR, "replication_audit.json")
+    with open(path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"[replication_audit] greedy kept {kept}; survive re-test "
+          f"{surv_rep} ({100*surv_rep/kept:.0f}%); "
+          f"vanish {kept-surv_rep} ({100*(kept-surv_rep)/kept:.0f}%) -> {path}")
+    return out
+
+
+if __name__ == "__main__":
+    print("Running regime grid (this is the headline data)...")
+    regime_grid()
+    print("\nRunning replication audit...")
+    replication_audit()
+    print("\nDone. Now run: python plots.py")

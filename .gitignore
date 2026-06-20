@@ -1,0 +1,31 @@
+# cloned upstream (re-created by setup/setup.sh)
+MLRC-Bench/
+autoresearch/
+
+# environments
+.venv/
+venv/
+env/
+*.egg-info/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# secrets
+.env
+skeptic_gate/.env
+
+# data / model checkpoints (downloaded by setup)
+*.pth
+*.npz
+*.tar.gz
+data/
+
+# local run outputs (the curated results/ at repo root ARE committed)
+skeptic_gate/results/
+skeptic_gate/results_*.log
+
+# os
+.DS_Store

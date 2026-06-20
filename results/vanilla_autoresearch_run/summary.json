@@ -1,0 +1,22 @@
+{
+  "run_id": "real_greedy_b8",
+  "arm": "greedy",
+  "policy": "greedy",
+  "budget": 8.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 0,
+  "mock_llm": false,
+  "mock_eval": false,
+  "started": "2026-06-20T18:01:50.929847+00:00",
+  "finished": "2026-06-20T19:02:04.706310+00:00",
+  "baseline_score": 0.11677155279489933,
+  "best_score": 0.16246795465994285,
+  "improvement": 0.04569640186504352,
+  "n_proposals": 7,
+  "n_accepted": 1,
+  "n_culled": 0,
+  "n_crashed": 0,
+  "eval_calls": 8,
+  "budget_spent": 8.0
+}
