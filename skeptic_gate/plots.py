@@ -6,6 +6,8 @@ Figures written to results/figs/:
   fig_crossover.png        -- 1D: TRUE perf vs noise, greedy vs causal
   fig_replication_audit.png-- greedy's kept "wins": survive vs vanish under re-test
   fig_false_accepts.png    -- false-acceptances vs noise, greedy vs causal
+  fig_portfolio_selection.png -- multi-method: winner's curse / regret / P(best) vs noise
+  fig_portfolio_scaling.png   -- multi-method: the max-of-N tax vs number of methods
 """
 
 import json
@@ -152,9 +154,96 @@ def fig_false_accepts(p_good_pick=0.20, world="ceiling"):
     print("wrote", p)
 
 
+# ---------------------------------------------------------------------------
+# Portfolio / selection-gate figures (the multi-method extension)
+# ---------------------------------------------------------------------------
+
+_SEL_STYLE = [
+    ("single", "tab:red", "naive best-of-N (1 eval/method)"),
+    ("fixedK", "tab:orange", "fixed-K re-test (uniform)"),
+    ("causal", "tab:blue", "causal selection gate (adaptive)"),
+]
+
+
+def fig_portfolio_selection():
+    o = _load("portfolio_selection.json")
+    rows = sorted(o["sigma_sweep"], key=lambda r: r["sigma"])
+    xs = [r["sigma"] for r in rows]
+    m = o["meta"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.6))
+
+    # (a) winner's curse: how much the reported score overstates true performance
+    ax = axes[0]
+    for key, color, label in _SEL_STYLE:
+        ax.plot(xs, [r[f"{key}_overstate"] for r in rows], "o-", color=color, label=label)
+    ax.set_xscale("log"); ax.set_xlabel("selection noise  sigma  (log)")
+    ax.set_ylabel("reported minus TRUE score of the pick")
+    ax.set_title("Winner's curse\n(naive pick's score is inflated)")
+    ax.axhline(0, color="gray", lw=0.8, ls="--"); ax.legend(fontsize=8)
+
+    # (b) true-performance regret of the shipped method
+    ax = axes[1]
+    for key, color, label in _SEL_STYLE:
+        ax.plot(xs, [r[f"{key}_regret"] for r in rows], "o-", color=color, label=label)
+    ax.set_xscale("log"); ax.set_xlabel("selection noise  sigma  (log)")
+    ax.set_ylabel("TRUE-performance regret  (best - shipped)")
+    ax.set_title("Regret of the shipped method\n(causal gate ~halves it)")
+    ax.legend(fontsize=8)
+
+    # (c) probability the truly-best method is selected
+    ax = axes[2]
+    for key, color, label in _SEL_STYLE:
+        ax.plot(xs, [r[f"{key}_p_correct"] for r in rows], "o-", color=color, label=label)
+    ax.set_xscale("log"); ax.set_xlabel("selection noise  sigma  (log)")
+    ax.set_ylabel("P(pick the truly-best method)")
+    ax.set_title("Recovering the best method")
+    ax.legend(fontsize=8)
+
+    fig.suptitle(f"Multi-method portfolio: selecting under noise  "
+                 f"(N={m['n_methods']} methods, {m['n_seeds']} runs; "
+                 f"naive budget=N, fixed-K & causal budget=N×K={m['n_methods']*m['K']})",
+                 fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    p = os.path.join(FIG_DIR, "fig_portfolio_selection.png")
+    fig.savefig(p, dpi=150); plt.close(fig)
+    print("wrote", p)
+
+
+def fig_portfolio_scaling():
+    o = _load("portfolio_selection.json")
+    rows = sorted(o["n_sweep"], key=lambda r: r["n_methods"])
+    xs = [r["n_methods"] for r in rows]
+    m = o["meta"]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6))
+
+    for key, color, label in _SEL_STYLE:
+        ax1.plot(xs, [r[f"{key}_p_correct"] for r in rows], "o-", color=color, label=label)
+    ax1.set_xlabel("number of methods in the portfolio  N")
+    ax1.set_ylabel("P(pick the truly-best method)")
+    ax1.set_title("The max-of-N tax\n(naive collapses as N grows)")
+    ax1.legend(fontsize=8)
+
+    for key, color, label in _SEL_STYLE:
+        ax2.plot(xs, [r[f"{key}_regret"] for r in rows], "o-", color=color, label=label)
+    ax2.set_xlabel("number of methods in the portfolio  N")
+    ax2.set_ylabel("TRUE-performance regret  (best - shipped)")
+    ax2.set_title("Regret vs portfolio size")
+    ax2.legend(fontsize=8)
+
+    fig.suptitle(f"More methods make the selection harder, not easier  "
+                 f"(selection noise sigma={m['fixed_sigma_for_Nsweep']}, "
+                 f"{m['n_seeds']} runs, equal budget N×K)", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    p = os.path.join(FIG_DIR, "fig_portfolio_scaling.png")
+    fig.savefig(p, dpi=150); plt.close(fig)
+    print("wrote", p)
+
+
 if __name__ == "__main__":
     fig_regime_heatmap()
     fig_crossover()
     fig_replication_audit()
     fig_false_accepts()
+    fig_portfolio_selection()
+    fig_portfolio_scaling()
     print("All figures ->", FIG_DIR)

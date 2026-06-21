@@ -37,6 +37,8 @@ from typing import Optional
 
 import numpy as np
 
+from gates import Fidelity, FULL
+
 # --- paths -----------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_DIR = REPO_ROOT / "MLRC-Bench" / "MLAgentBench" / "benchmarks_base" / "machine_unlearning" / "env"
@@ -200,7 +202,8 @@ class MLRCWorld:
     """
 
     def __init__(self, proposer, snapshot_dir: Path, eval_timeout: float = 1200.0,
-                 mock_eval: bool = False, mock_llm: bool = False, mock_sigma: float = 0.02):
+                 mock_eval: bool = False, mock_llm: bool = False, mock_sigma: float = 0.02,
+                 fidelity: Fidelity = FULL):
         self.proposer = proposer
         self.snapshot_dir = snapshot_dir
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -208,6 +211,12 @@ class MLRCWorld:
         self.mock_eval = mock_eval
         self.mock_llm = mock_llm
         self.mock_sigma = mock_sigma
+        # cost lever: the active fidelity. `num_models` (if set) is pushed to the
+        # MLRC eval via the MU_NUM_MODELS env var (fewer models = cheaper, noisier);
+        # `sigma_mult` inflates the mock eval's noise so the trade is visible offline.
+        self.fidelity = fidelity
+        self.num_models = fidelity.params.get("num_models")
+        self.sigma_mult = float(fidelity.params.get("sigma_mult", 1.0))
         self._mock_rng = np.random.default_rng(0)
 
         self.best_code = METHOD_FILE.read_text()  # baseline file = starting incumbent
@@ -251,8 +260,9 @@ class MLRCWorld:
         if not candidate.static_ok:
             return CRASH_SCORE
         # Pretend baseline ~0.054 with a small bump for "good-looking" edits + noise.
+        # The cheaper fidelity inflates noise by sigma_mult (the cost-lever trade).
         base = 0.054 + self.mock_rng_bump(candidate)
-        return float(base + self._mock_rng.normal(0.0, self.mock_sigma))
+        return float(base + self._mock_rng.normal(0.0, self.mock_sigma * self.sigma_mult))
 
     def mock_rng_bump(self, candidate: Candidate) -> float:
         return 0.005 if "ascent" in candidate.code.lower() else 0.0
@@ -265,6 +275,8 @@ class MLRCWorld:
             pass
         env = dict(os.environ)
         env["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+        if self.num_models is not None:  # cost lever -> MLRC evaluation.py reads this
+            env["MU_NUM_MODELS"] = str(self.num_models)
         t0 = time.time()
         try:
             proc = subprocess.run(

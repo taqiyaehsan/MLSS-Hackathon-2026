@@ -22,6 +22,8 @@ skeptic_gate/.env
 *.npz
 *.tar.gz
 data/
+_data_fmnist/
+skeptic_gate/_data_fmnist/
 
 # local run outputs (the curated results/ at repo root ARE committed)
 skeptic_gate/results/

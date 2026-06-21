@@ -29,7 +29,7 @@ from typing import Optional
 import numpy as np
 
 from gates import (Budget, Incumbent, GreedyPolicy, CausalPolicy,
-                   CoherenceWrapper, run_loop)
+                   CoherenceWrapper, run_loop, Fidelity, FULL)
 
 
 @dataclass
@@ -61,10 +61,13 @@ class SyntheticWorld:
     """Holds the hidden true performance T and generates candidates / evals."""
 
     def __init__(self, cfg: SyntheticConfig, proposal_rng: np.random.Generator,
-                 noise_rng: np.random.Generator):
+                 noise_rng: np.random.Generator, sigma_mult: float = 1.0):
         self.cfg = cfg
         self.prng = proposal_rng     # generates candidate stream (shared across arms)
         self.nrng = noise_rng        # generates eval noise (per arm)
+        # cost lever: a cheaper fidelity inflates the per-eval noise by this factor
+        # (fewer epochs / inner models => a noisier measurement of the same change).
+        self.sigma_mult = sigma_mult
         self.T = 0.0                 # true performance, baseline = 0
         # bookkeeping for the audit
         self.accepted_truth: list[dict] = []
@@ -102,7 +105,7 @@ class SyntheticWorld:
         if candidate.broken:
             return self.cfg.crash_score
         true_val = self.T + self._realized(candidate.delta)
-        return true_val + self.nrng.normal(0.0, self.cfg.sigma)
+        return true_val + self.nrng.normal(0.0, self.cfg.sigma * self.sigma_mult)
 
     # -- commit on accept ----------------------------------------------------
     def on_accept(self, candidate: Candidate, decision) -> None:
@@ -147,38 +150,41 @@ class ArmResult:
     audit_survive: int = 0
 
 
-def _build_policy(arm: str, world: SyntheticWorld):
+def _build_policy(arm: str, world: SyntheticWorld, eval_cost: float = 1.0):
     if arm == "greedy":
-        return GreedyPolicy()
+        return GreedyPolicy(eval_cost=eval_cost)
     if arm == "causal":
-        return CausalPolicy(k0=2, k_max=6, z=1.0)
+        return CausalPolicy(k0=2, k_max=6, z=1.0, eval_cost=eval_cost)
     if arm == "coh+greedy":
-        return CoherenceWrapper(GreedyPolicy(), world.is_broken,
+        return CoherenceWrapper(GreedyPolicy(eval_cost=eval_cost), world.is_broken,
                                 check_cost=world.cfg.coherence_cost)
     if arm == "coh+causal":
-        return CoherenceWrapper(CausalPolicy(k0=2, k_max=6, z=1.0), world.is_broken,
-                                check_cost=world.cfg.coherence_cost)
+        return CoherenceWrapper(CausalPolicy(k0=2, k_max=6, z=1.0, eval_cost=eval_cost),
+                                world.is_broken, check_cost=world.cfg.coherence_cost)
     raise ValueError(arm)
 
 
 def run_arm(arm: str, cfg: SyntheticConfig, budget_units: float,
-            outer_seed: int, return_world: bool = False):
+            outer_seed: int, return_world: bool = False, fidelity: Fidelity = FULL):
     # Candidate stream depends ONLY on outer_seed+cfg -> identical across arms.
     prng = np.random.default_rng(outer_seed * 1000 + 7)
     # Eval noise stream is arm-independent in seed so arms face comparable noise.
     nrng = np.random.default_rng(outer_seed * 1000 + 99)
-    world = SyntheticWorld(cfg, prng, nrng)
-    policy = _build_policy(arm, world)
+    # cost lever: a cheaper fidelity charges less budget per eval but is noisier.
+    sigma_mult = float(fidelity.params.get("sigma_mult", 1.0))
+    eval_cost = fidelity.cost
+    world = SyntheticWorld(cfg, prng, nrng, sigma_mult=sigma_mult)
+    policy = _build_policy(arm, world, eval_cost=eval_cost)
     budget = Budget(budget_units)
 
     # Baseline incumbent: measure the starting point with 2 seeds so the causal
     # gate has a reference band. Charge these to the budget (counts as spend).
     base_scores = []
     for s in range(2):
-        if budget.can_afford(1.0):
+        if budget.can_afford(eval_cost):
             base_scores.append(world.evaluate(
                 Candidate(delta=0.0, broken=False), 5_000 + s))
-            budget.charge(1.0)
+            budget.charge(eval_cost)
     if not base_scores:
         base_scores = [0.0]
 

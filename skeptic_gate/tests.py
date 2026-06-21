@@ -177,6 +177,95 @@ check("audit with noise: null changes mostly do NOT survive",
 
 
 # ---------------------------------------------------------------------------
+print("\n[11] Portfolio selection gate: sound invariants")
+from portfolio import select_single, select_fixed_k, select_causal
+
+# Three methods with KNOWN true qualities; method 2 is genuinely best.
+T = np.array([0.30, 0.34, 0.40])
+true_best = int(np.argmax(T))
+
+# (a) zero selection noise: every rule must pick the truly-best method.
+rng = np.random.default_rng(1)
+for nm, fn in [("single", lambda: select_single(T, 0.0, rng)),
+               ("fixedK", lambda: select_fixed_k(T, 0.0, rng, 5)),
+               ("causal", lambda: select_causal(T, 0.0, rng, budget_cap=15))]:
+    w, _, _ = fn()
+    check(f"sigma=0 {nm} picks the true best", w == true_best, f"picked {w}")
+
+# (b) equal budget: causal and fixedK both spend <= N*K; single spends N.
+rng = np.random.default_rng(2)
+_, u_single, _ = select_single(T, 0.05, rng)
+_, u_fixed, _ = select_fixed_k(T, 0.05, rng, 5)
+_, u_causal, _ = select_causal(T, 0.05, rng, budget_cap=len(T) * 5)
+check("single budget == N", u_single == len(T), f"{u_single}")
+check("fixedK budget == N*K", u_fixed == len(T) * 5, f"{u_fixed}")
+check("causal budget <= N*K (equal-budget cap honoured)",
+      u_causal <= len(T) * 5, f"{u_causal}")
+
+# (c) winner's curse: under noise, the naive pick's reported score overstates
+#     its own true performance ON AVERAGE (the bias the gate exists to fight).
+rng = np.random.default_rng(3)
+over = []
+for _ in range(2000):
+    w, _, obs = select_single(T, 0.10, rng)
+    over.append(obs - T[w])
+check("naive selection overstates the winner's true score (winner's curse)",
+      np.mean(over) > 0.0, f"mean overstatement={np.mean(over):.4f}")
+
+# (d) end-to-end: the persisted experiment shows the gate cutting the curse.
+ps = experiment.portfolio_selection(n_methods=4, n_seeds=60)
+hi = ps["sigma_sweep"][-1]
+check("re-testing reduces winner's curse vs naive (high-noise cell)",
+      hi["causal_overstate"] < hi["single_overstate"],
+      f"causal={hi['causal_overstate']:.3f} single={hi['single_overstate']:.3f}")
+check("causal selection regret <= naive regret (high-noise cell)",
+      hi["causal_regret"] <= hi["single_regret"] + 1e-9,
+      f"causal={hi['causal_regret']:.4f} single={hi['single_regret']:.4f}")
+
+
+# ---------------------------------------------------------------------------
+print("\n[12] Cost lever (fidelity): budget accounting + speed/accuracy trade")
+from gates import Fidelity, FULL, CHEAP, Budget as _B, GreedyPolicy as _G
+
+# (a) the cheaper fidelity charges less per eval, so a fixed budget funds MORE evals.
+cfg = SyntheticConfig(sigma=0.05, p_good=0.25)
+r_full = run_arm("greedy", cfg, 60.0, 7, fidelity=FULL)
+r_cheap = run_arm("greedy", cfg, 60.0, 7, fidelity=CHEAP)
+check("cheap fidelity yields more steps at equal budget",
+      r_cheap.n_steps > r_full.n_steps,
+      f"cheap={r_cheap.n_steps} full={r_full.n_steps}")
+
+# (b) full fidelity is unchanged vs the no-fidelity default (no silent drift).
+r_default = run_arm("greedy", cfg, 60.0, 7)
+check("FULL fidelity == legacy default (no behavior change)",
+      r_default.true_performance == r_full.true_performance
+      and r_default.n_steps == r_full.n_steps, "")
+
+# (c) per-eval cost is charged correctly by the policy (cost units, not eval counts).
+b = _B(10.0)
+inc = Incumbent(scores=[0.0])
+pol = _G(eval_cost=0.3)
+d = pol.decide(Candidate(delta=0.0, broken=False),
+               lambda c, s: 0.1, inc, b, 123)
+check("greedy charges eval_cost (0.3), not 1.0",
+      abs(b.spent - 0.3) < 1e-9 and abs(d.units_spent - 0.3) < 1e-9,
+      f"spent={b.spent} units={d.units_spent}")
+
+# (d) a cheaper fidelity is noisier (sigma inflated by sigma_mult).
+cheap_noisy = Fidelity("cheapnoisy", cost=0.3, params={"sigma_mult": 2.0})
+import numpy as _np
+prng = _np.random.default_rng(1); nrng = _np.random.default_rng(2)
+from synthetic import SyntheticWorld as _W
+w_full = _W(cfg, prng, _np.random.default_rng(2), sigma_mult=1.0)
+w_chp = _W(cfg, prng, _np.random.default_rng(2), sigma_mult=2.0)
+cand0 = Candidate(delta=0.0, broken=False)
+sd_full = _np.std([w_full.evaluate(cand0, s) for s in range(400)])
+sd_chp = _np.std([w_chp.evaluate(cand0, s) for s in range(400)])
+check("cheaper fidelity has larger eval noise", sd_chp > 1.5 * sd_full,
+      f"full_sd={sd_full:.4f} cheap_sd={sd_chp:.4f}")
+
+
+# ---------------------------------------------------------------------------
 print(f"\n==== {PASS} passed, {FAIL} failed ====")
 import sys
 sys.exit(1 if FAIL else 0)

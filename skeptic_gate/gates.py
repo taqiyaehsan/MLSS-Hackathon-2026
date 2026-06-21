@@ -11,9 +11,17 @@ The same policies run unchanged against (a) the synthetic mocked eval and later
 (b) the real MLRC eval. The only thing that differs between experimental ARMS is
 the AcceptPolicy; the proposal stream and budget are held identical.
 
-Budget unit = one evaluate() call (one seed). Gate overhead (extra seeds for the
-causal gate, the cheap coherence check) is counted in the SAME budget, per the
-"equal-budget accounting" rule in HANDOFF section 5.
+Budget unit = the cost of ONE full-fidelity evaluate() call. Gate overhead (extra
+seeds for the causal gate, the cheap coherence check) is counted in the SAME
+budget, per the "equal-budget accounting" rule in HANDOFF section 5.
+
+COST LEVER (the `Fidelity` knob): an evaluate() call can be run at a cheaper, lower
+-fidelity operating point (fewer epochs / fewer inner models / subsampled data).
+A cheap eval is FASTER (costs < 1 budget unit) but NOISIER. This module stays
+task-agnostic: it only knows a fidelity's `cost`; the ADAPTER interprets the rest
+(`params`) and the cheaper eval's higher noise is produced by the world, not here.
+Holding the budget fixed, a cheaper fidelity buys MORE evals (more seeds / steps)
+at the price of per-eval precision -- the screen-cheap / confirm-expensive trade.
 """
 
 from __future__ import annotations
@@ -21,6 +29,28 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 import math
+
+
+# ---------------------------------------------------------------------------
+# Cost lever: a fidelity is a cost/accuracy operating point for the evaluator
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Fidelity:
+    """One operating point of the cost lever. `cost` is the budget charged per
+    eval at this fidelity (full eval == 1.0). `params` is an opaque dict the TASK
+    adapter interprets (e.g. {"num_models": 3} for unlearning, {"max_epochs": 3,
+    "data_fraction": 0.5} for rainfall, {"sigma_mult": 1.8} for the synthetic).
+    Task-agnostic code touches ONLY `name` and `cost`."""
+    name: str = "full"
+    cost: float = 1.0
+    params: dict = field(default_factory=dict)
+
+
+# Standard presets. `cost` is a PLANNED weight (validate against measured
+# wall-clock on the real task); cheaper fidelities should also raise eval noise.
+FULL = Fidelity(name="full", cost=1.0)
+CHEAP = Fidelity(name="cheap", cost=0.3)
 
 
 # ---------------------------------------------------------------------------
@@ -110,20 +140,27 @@ class AcceptPolicy:
 class GreedyPolicy(AcceptPolicy):
     """The autoresearch baseline: one noisy eval, single-number comparison.
     Accept iff the candidate's single observed score beats the incumbent's
-    single cached observed score. Chases noise by construction."""
+    single cached observed score. Chases noise by construction.
+
+    `eval_cost` is the budget charged for its one eval (set from the active
+    Fidelity; 1.0 = full). A cheaper fidelity lets the same budget fund more
+    greedy steps, but each step's single number is noisier."""
 
     name = "greedy"
 
+    def __init__(self, eval_cost: float = 1.0):
+        self.eval_cost = eval_cost
+
     def decide(self, candidate, evaluate, incumbent, budget, seed0):
-        if not budget.can_afford(1.0):
+        if not budget.can_afford(self.eval_cost):
             return Decision(False, "out_of_budget", units_spent=0.0)
         s = evaluate(candidate, seed0)
-        budget.charge(1.0)
+        budget.charge(self.eval_cost)
         # incumbent.mean is its single cached score (greedy caches one number)
         accept = s > incumbent.mean
         delta = s - incumbent.mean
         return Decision(accept, "greedy_better" if accept else "greedy_worse",
-                        candidate_scores=[s], units_spent=1.0, delta_hat=delta)
+                        candidate_scores=[s], units_spent=self.eval_cost, delta_hat=delta)
 
 
 class CausalPolicy(AcceptPolicy):
@@ -139,10 +176,11 @@ class CausalPolicy(AcceptPolicy):
 
     name = "causal"
 
-    def __init__(self, k0: int = 2, k_max: int = 6, z: float = 1.0):
+    def __init__(self, k0: int = 2, k_max: int = 6, z: float = 1.0, eval_cost: float = 1.0):
         self.k0 = k0
         self.k_max = k_max
         self.z = z  # ~1 SE rule by default (pre-registered)
+        self.eval_cost = eval_cost  # budget per seed (from the active Fidelity)
 
     def decide(self, candidate, evaluate, incumbent, budget, seed0):
         scores: list = []
@@ -151,15 +189,15 @@ class CausalPolicy(AcceptPolicy):
         while k < self.k_max:
             want = self.k0 if k == 0 else 1
             for j in range(want):
-                if not budget.can_afford(1.0):
+                if not budget.can_afford(self.eval_cost):
                     if len(scores) < 2:
                         return Decision(False, "out_of_budget",
                                         candidate_scores=scores,
-                                        units_spent=float(k))
+                                        units_spent=k * self.eval_cost)
                     # decide on what we have
                     return self._finalize(scores, incumbent, k)
                 scores.append(evaluate(candidate, seed0 + k))
-                budget.charge(1.0)
+                budget.charge(self.eval_cost)
                 k += 1
 
             delta, se = _welch_delta_se(scores, incumbent.scores)
@@ -167,15 +205,15 @@ class CausalPolicy(AcceptPolicy):
                 # no measurable noise: decide on sign immediately
                 accept = delta > 0
                 return Decision(accept, "causal_zero_noise",
-                                candidate_scores=scores, units_spent=float(k),
+                                candidate_scores=scores, units_spent=k * self.eval_cost,
                                 delta_hat=delta, se_hat=se)
             if delta - self.z * se > 0:
                 return Decision(True, "causal_clears_band",
-                                candidate_scores=scores, units_spent=float(k),
+                                candidate_scores=scores, units_spent=k * self.eval_cost,
                                 delta_hat=delta, se_hat=se)
             if delta + self.z * se < 0:
                 return Decision(False, "causal_below_band",
-                                candidate_scores=scores, units_spent=float(k),
+                                candidate_scores=scores, units_spent=k * self.eval_cost,
                                 delta_hat=delta, se_hat=se)
             # else borderline -> loop, spend one more seed
         return self._finalize(scores, incumbent, k)
@@ -184,7 +222,7 @@ class CausalPolicy(AcceptPolicy):
         delta, se = _welch_delta_se(scores, incumbent.scores)
         accept = (delta - self.z * se) > 0
         return Decision(accept, "causal_final_clears" if accept else "causal_final_inconclusive",
-                        candidate_scores=scores, units_spent=float(k),
+                        candidate_scores=scores, units_spent=k * self.eval_cost,
                         delta_hat=delta, se_hat=se)
 
 

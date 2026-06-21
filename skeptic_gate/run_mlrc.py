@@ -26,22 +26,33 @@ from pathlib import Path
 
 import numpy as np
 
-from gates import Budget, Incumbent, GreedyPolicy, CausalPolicy, CoherenceWrapper
+from gates import (Budget, Incumbent, GreedyPolicy, CausalPolicy, CoherenceWrapper,
+                   Fidelity, FULL)
 from mlrc_adapter import MLRCWorld, OpenAIProposer, Candidate, REPO_ROOT, METHOD_FILE
 
 RESULTS_ROOT = REPO_ROOT / "skeptic_gate" / "results"
 BASELINE_FILE = REPO_ROOT / "skeptic_gate" / "baseline_MyMethod.py"
 
+# Cost-lever presets for this task. "cheap" runs the unlearning eval over 3 inner
+# models instead of 10 (faster, noisier) and is charged 0.3 budget units/eval, so
+# the same budget funds ~3x more evals. Validate the 0.3 weight against measured
+# wall-clock on the GPU before trusting it for equal-budget claims.
+FIDELITIES = {
+    "full": FULL,
+    "cheap": Fidelity(name="cheap", cost=0.3, params={"num_models": 3, "sigma_mult": 1.6}),
+}
 
-def build_policy(arm: str, world: MLRCWorld):
+
+def build_policy(arm: str, world: MLRCWorld, eval_cost: float = 1.0):
     if arm == "greedy":
-        return GreedyPolicy()
+        return GreedyPolicy(eval_cost=eval_cost)
     if arm == "causal":
-        return CausalPolicy(k0=2, k_max=6, z=1.0)
+        return CausalPolicy(k0=2, k_max=6, z=1.0, eval_cost=eval_cost)
     if arm == "coh+greedy":
-        return CoherenceWrapper(GreedyPolicy(), world.is_broken)
+        return CoherenceWrapper(GreedyPolicy(eval_cost=eval_cost), world.is_broken)
     if arm == "coh+causal":
-        return CoherenceWrapper(CausalPolicy(k0=2, k_max=6, z=1.0), world.is_broken)
+        return CoherenceWrapper(CausalPolicy(k0=2, k_max=6, z=1.0, eval_cost=eval_cost),
+                                world.is_broken)
     raise ValueError(f"unknown arm: {arm}")
 
 
@@ -50,7 +61,9 @@ def main():
     ap.add_argument("--arm", default="greedy",
                     choices=["greedy", "causal", "coh+greedy", "coh+causal"])
     ap.add_argument("--budget", type=float, default=6.0,
-                    help="total eval-units (one real eval = 1 unit, ~3 min)")
+                    help="total eval-units (one FULL eval = 1 unit, ~3 min)")
+    ap.add_argument("--fidelity", default="full", choices=list(FIDELITIES),
+                    help="cost lever: 'cheap' = fewer inner models, faster+noisier, 0.3 units/eval")
     ap.add_argument("--model", default="gpt-4.1-mini")
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--seed", type=int, default=0, help="outer seed (logging + RNG label)")
@@ -79,16 +92,20 @@ def main():
         log_f.write(json.dumps(rec) + "\n")
         log_f.flush()
 
+    fidelity = FIDELITIES[args.fidelity]
     proposer = None if args.mock_llm else OpenAIProposer(args.model, args.temperature)
     world = MLRCWorld(proposer, snapshot_dir=run_dir / "proposals",
                       eval_timeout=args.eval_timeout,
-                      mock_eval=args.mock_eval, mock_llm=args.mock_llm)
-    policy = build_policy(args.arm, world)
+                      mock_eval=args.mock_eval, mock_llm=args.mock_llm,
+                      fidelity=fidelity)
+    policy = build_policy(args.arm, world, eval_cost=fidelity.cost)
     budget = Budget(args.budget)
 
     meta = {
         "run_id": run_id, "arm": args.arm, "policy": policy.name, "budget": args.budget,
         "model": args.model, "temperature": args.temperature, "seed": args.seed,
+        "fidelity": fidelity.name, "fidelity_cost": fidelity.cost,
+        "fidelity_params": fidelity.params,
         "mock_llm": args.mock_llm, "mock_eval": args.mock_eval,
         "started": datetime.now(timezone.utc).isoformat(),
     }
@@ -100,7 +117,7 @@ def main():
     print("measuring baseline ...")
     t0 = time.time()
     base_score = world.evaluate(base_cand, seed=5000 + args.seed)
-    budget.charge(1.0)
+    budget.charge(fidelity.cost)
     world.best_score = base_score
     incumbent = Incumbent(scores=[base_score])
     emit({"step": -1, "kind": "baseline", "score": base_score,

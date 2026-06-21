@@ -123,6 +123,46 @@ A single eval takes a few minutes and prints a `Final Score` (higher is better; 
 
 ---
 
+## Running on Google Cloud (GPU)
+
+The whole project can run on one GCP GPU VM — the small tasks (synthetic,
+FashionMNIST, MAGIC) on CPU, and Machine Unlearning on the GPU (where its eval is
+**stationary**, unlike a laptop). Steps run from your **laptop** unless marked
+*(on VM)*.
+
+```bash
+# 1. Install the gcloud CLI + authenticate (laptop)
+brew install --cask google-cloud-sdk        # macOS
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+
+# 2. (likely needed) request GPU quota: IAM & Admin -> Quotas ->
+#    "NVIDIA T4 GPUs" >= 1 in your zone. New projects default to 0; approval can
+#    take minutes-to-hours, so do this FIRST.
+
+# 3. Create the VM (Deep Learning image ships CUDA + driver)
+gcloud compute instances create skeptic-gpu \
+  --zone=us-central1-a --machine-type=n1-standard-8 \
+  --accelerator=type=nvidia-tesla-t4,count=1 --maintenance-policy=TERMINATE \
+  --image-family=common-cu121-debian-11 --image-project=deeplearning-platform-release \
+  --boot-disk-size=100GB --metadata=install-nvidia-driver=True
+
+# 4. Connect (writes an SSH config entry usable by VS Code Remote-SSH too)
+gcloud compute config-ssh
+gcloud compute ssh skeptic-gpu --zone=us-central1-a
+
+# 5. (on VM) clone + provision
+git clone https://github.com/taqiyaehsan/MLSS-Hackathon-2026.git
+cd MLSS-Hackathon-2026
+bash setup/gcp_setup.sh        # CUDA env, deps, MLRC-Bench, Claude Code hints
+```
+
+Stop the VM when idle (`gcloud compute instances stop skeptic-gpu`) — a stopped
+instance bills only for disk, not GPU. `setup/gcp_setup.sh` ends by printing how
+to install **Claude Code** on the VM so the agent runs next to the GPU.
+
+---
+
 ## Running the autoresearcher
 
 All commands run from `skeptic_gate/` using the project venv.
