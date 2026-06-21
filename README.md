@@ -157,6 +157,16 @@ cd MLSS-Hackathon-2026
 bash setup/gcp_setup.sh        # CUDA env, deps, MLRC-Bench, Claude Code hints
 ```
 
+After the env is set up (conda or venv), verify the code runs:
+
+```bash
+cd skeptic_gate && python smoke_test.py    # expect: SMOKE PASSED (5/5); CUDA available=True on the GPU
+```
+
+`smoke_test.py` needs no GPU, data, or API key — it checks imports, the synthetic
+gate pipeline, and a real train-and-gate loop on bundled `digits`, and reports
+whether CUDA is visible. Run it first to confirm the clone + environment are good.
+
 Stop the VM when idle (`gcloud compute instances stop skeptic-gpu`) — a stopped
 instance bills only for disk, not GPU. `setup/gcp_setup.sh` ends by printing how
 to install **Claude Code** on the VM so the agent runs next to the GPU.
