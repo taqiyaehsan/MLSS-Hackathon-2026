@@ -372,6 +372,204 @@ cd skeptic_gate
    choose by your accuracy / cost / reliability priorities. The held-out test is
    touched once per point (report only, never to build the frontier).
 
+### What the inputs and outputs look like (worked example: `magic`)
+
+End-to-end, so you can mirror the shapes for your own task/dataset. **You author
+the three inputs; the pipeline produces the outputs.**
+
+#### INPUT 1 — the problem statement you write (`tasks/<name>/background.md`)
+
+Free-form, but it MUST end with the hard contract the agent has to obey (this is
+the part the coherence gate enforces):
+
+```markdown
+## What you are given
+The harness hands `fit` a float tensor `X` of shape (N, 10) — features already
+standardized — and integer labels `y` in {0, 1}. The held-out test set is owned
+by the harness and is never visible to your code.
+
+## Hard rules (a violation makes the eval crash and the proposal is discarded)
+- Output a COMPLETE Python file defining `class MyMethod(BaseMethod)` with exactly
+  `def fit(self, X, y, seed):` and `def predict(self, X):`.
+- `from base_method import BaseMethod`. Imports allowed: torch, numpy, math, copy.
+  NO file or network access. CPU only. Seed ALL randomness from `seed`.
+- `predict` must return class indices of shape (N,).
+```
+
+#### INPUT 2 — the deliberately-mediocre baseline you write (`tasks/<name>/baseline_method.py`)
+
+<details><summary>the <code>magic</code> baseline — a logistic regression (click to expand)</summary>
+
+```python
+import torch
+import torch.nn as nn
+from base_method import BaseMethod
+
+DEVICE = torch.device("cpu")
+
+class MyMethod(BaseMethod):
+    def fit(self, X, y, seed: int) -> None:
+        torch.manual_seed(seed)
+        n, d = X.shape
+        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression
+        opt = torch.optim.SGD(self.model.parameters(), lr=0.05)
+        loss_fn = nn.CrossEntropyLoss()
+        g = torch.Generator().manual_seed(seed)
+        self.model.train()
+        for _ in range(5):                              # only 5 epochs -> headroom
+            perm = torch.randperm(n, generator=g)
+            for i in range(0, n, 128):
+                idx = perm[i:i + 128]
+                opt.zero_grad()
+                loss_fn(self.model(X[idx]), y[idx]).backward()
+                opt.step()
+
+    def predict(self, X):
+        self.model.eval()
+        with torch.no_grad():
+            return self.model(X).argmax(1)
+```
+</details>
+
+#### INPUT 3 — two one-line wirings
+
+```python
+# task_data.py  — return the six CPU tensors; register under your task name
+LOADERS = {"fashionmnist": load_fashionmnist, "magic": load_magic, ...}
+
+# local_task.py — register the spec (per-eval timeout, noise regimes, metric)
+"magic": TaskSpec("magic", time_limit=60.0, regimes=[...], metric="accuracy"),
+```
+
+---
+
+#### INTERMEDIATE OUTPUT — what the agent *writes* each step
+
+A COMPLETE replacement `MyMethod.py`. Here is a real edit the agent made on `magic`
+(logistic → a 3-layer MLP with GELU, dropout, class-weighting, cosine LR):
+
+<details><summary>an agent-written method (click to expand)</summary>
+
+```python
+import torch
+import torch.nn as nn
+from base_method import BaseMethod
+
+DEVICE = torch.device("cpu")
+
+class MyMethod(BaseMethod):
+    def fit(self, X, y, seed: int) -> None:
+        torch.manual_seed(seed)
+        n, d = X.shape
+        classes, counts = torch.unique(y, return_counts=True)   # class-weighted loss
+        weight = torch.zeros(2, device=DEVICE)
+        for c, cnt in zip(classes, counts):
+            weight[c] = 1.0 / cnt
+        weight /= weight.sum()
+        self.model = nn.Sequential(
+            nn.Linear(d, 64), nn.GELU(), nn.Dropout(0.3),
+            nn.Linear(64, 32), nn.GELU(), nn.Dropout(0.3),
+            nn.Linear(32, 2),
+        ).to(DEVICE)
+        loss_fn = nn.CrossEntropyLoss(weight=weight)
+        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=30)
+        g = torch.Generator().manual_seed(seed)
+        self.model.train()
+        for _ in range(30):
+            perm = torch.randperm(n, generator=g)
+            for i in range(0, n, 128):
+                idx = perm[i:i + 128]
+                opt.zero_grad()
+                loss_fn(self.model(X[idx]), y[idx]).backward()
+                opt.step()
+            sched.step()
+
+    def predict(self, X):
+        self.model.eval()
+        with torch.no_grad():
+            return self.model(X).argmax(1)
+```
+</details>
+
+#### OUTPUT A — single-method check (`run_method.py` prints one JSON line)
+
+```bash
+$ python run_method.py --task magic --method tasks/magic/baseline_method.py --metric accuracy
+{"score": 0.7865, "metric": "accuracy", "n_train": 6000, "split": "val", "seed": 0, "frac": 1.0, "wall_s": 0.21}
+```
+
+#### OUTPUT B — the full study console (`study.py magic llm 8 5`, abridged)
+
+```
+================================================================================
+STUDY [magic]  metric=accuracy  proposer=openai:gpt-4.1-mini
+================================================================================
+1) agent writes methods (recording every coherent one)...
+    step 1: ACCEPT (gain clears band, 4 seeds) mean=0.8707  Upgrade to a two-layer MLP with ReLU, ...
+    step 2: reject (within noise band, 2 seeds) mean=0.8334  Add batch normalization, increase ...
+    ... (8 proposals; a method that fails to parse/keep the signature prints "CULLED")
+   pool = 9 methods (incl. baseline)
+2) scoring matrix over 5 seeds (val) + test + FLOPs...
+3) replaying SAME gates (greedy vs causal) over identical candidates...
+
+  --- replay (scientifically-legit paired ablation) ---
+  greedy : accepted 1, VANISH on re-test 0, survive 1
+  causal : accepted 1, VANISH on re-test 0, survive 1
+
+  --- PARETO FRONTIER over the methods the agent wrote (no auto-pick) ---
+  idx   acc(val)    stab    GFLOPs  wall(ms)    test  method
+  *  1     0.8707  0.0058      0.20       132  0.8675  Upgrade to a two-layer MLP with ReLU, weig
+  *  8     0.8626  0.0011      2.74       348  0.8610  Add a hidden layer with GELU activations a
+  *  3     0.8623  0.0057      2.38       299  0.8560  Add a hidden layer with GELU activations,
+     2     0.8334  0.0088      1.56       385  0.8330  Add batch normalization, increase model ca
+  *  0     0.7982  0.0023      0.00        19  0.7855  baseline
+  (* = on frontier; 6 of 9 methods non-dominated)
+
+  saved -> results/study_magic  (wall 612.4s)
+  csv  -> methods_llm.csv, replay_llm.csv
+```
+
+#### OUTPUT C — the files written to `results/study_<task>/`
+
+| file | what it is |
+|---|---|
+| `llm.json` | everything: candidate pool + code, per-seed score matrix, test, FLOPs, replay, frontier |
+| `methods_llm.csv` | one row per method (the Pareto table) |
+| `replay_llm.csv` | greedy-vs-causal accept audit (which "wins" survive re-test) |
+| `regime_eval.json` / `.csv` | after `regime_sweep.py <task> eval 8 200`: false-positive rate vs eval noise |
+| `figs/*.png` | after `make_poster_figs.py`: progress, Pareto, regime curves |
+
+Sample rows so you know the schema:
+
+```csv
+# methods_llm.csv
+task,idx,intent,metric,acc_val_mean,stability_std,test,flops,gflops,wall_ms,on_frontier
+magic,1,"Upgrade to a two-layer MLP ...",accuracy,0.870700,0.005794,0.867500,199680000,0.1997,132.2,1
+magic,0,baseline,accuracy,0.798200,0.002253,0.785500,2400000,0.0024,19.3,1
+
+# replay_llm.csv
+task,arm,n_accepted,n_vanished,n_survive,accept_idx,prev_idx,apparent,true_before,true_after,true_gain,survives
+magic,greedy,1,0,1,1,0,0.873500,0.798200,0.870700,0.072500,1
+magic,causal,1,0,1,1,0,0.873750,0.798200,0.870700,0.072500,1
+```
+
+```jsonc
+// regime_eval.json (one entry of "points"; truth[] is the full-eval ranking)
+{ "task": "magic", "n_seeds": 8, "r_trials": 200, "truth": [0.7985, 0.8730, ...],
+  "points": [
+    { "level": 100, "noise_std": 0.028,
+      "greedy": { "fp_rate": 0.54, "mean_vanished": 0.54, "mean_final_acc": 0.8676 },
+      "causal": { "fp_rate": 0.24, "mean_vanished": 0.24, "mean_final_acc": 0.8712 } }
+  ] }
+```
+
+> **What "good" looks like for your task:** a baseline → best **progress** number,
+> a `replay` where greedy's `n_vanished` ≥ causal's, and a regime curve where
+> greedy's `fp_rate` rises above causal's as noise grows. If greedy never beats
+> causal even at high noise, your task may be too low-noise — shrink the eval set
+> (raise the regime levels) to expose the effect.
+
 ### Add a new task (plug-and-play)
 
 1. **`task_data.py`** — add `load_<name>()` returning the six CPU tensors
