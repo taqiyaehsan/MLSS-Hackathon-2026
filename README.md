@@ -257,6 +257,10 @@ Stop the VM when idle (`gcloud compute instances stop skeptic-gpu`) — a stoppe
 instance bills only for disk, not GPU. `setup/gcp_setup.sh` ends by printing how
 to install **Claude Code** on the VM so the agent runs next to the GPU.
 
+For a step-by-step walkthrough of running the **Machine Unlearning** task on the
+GPU box — data prep, the cost lever, all greedy/skeptic arms, and the replication
+audit — see [`docs/GCP_MACHINE_UNLEARNING.md`](docs/GCP_MACHINE_UNLEARNING.md).
+
 ---
 
 ## Running the autoresearcher
