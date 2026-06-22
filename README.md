@@ -48,24 +48,30 @@ evaluation are held identical, so the comparison is a clean paired ablation.
 
 ### The full pipeline
 
-```mermaid
-flowchart TD
-    A["Proposer<br/>(LLM agent or programmatic mutator)<br/>suggests an edit"] --> B{"Coherence gate<br/>parses / in bounds?"}
-    B -- no --> X["Cull — no eval spent"]
-    B -- yes --> C["Evaluate<br/>really train the model →<br/>noisy validation score"]
-    C --> D{"Accept policy"}
-    D -- "greedy" --> E{"score &gt; incumbent?"}
-    D -- "causal" --> F["Re-test over several seeds"]
-    F --> G{"gain clears<br/>the noise band?"}
-    E -- yes --> H["Accept → new incumbent"]
-    G -- yes --> H
-    E -- no --> I["Discard → revert"]
-    G -- no --> I
-    H --> J{"budget left?"}
-    I --> J
-    X --> J
-    J -- yes --> A
-    J -- no --> K["Ship final config<br/>→ held-out TEST + replication audit"]
+```
+repeat until the eval budget runs out:
+
+  1. Proposer        LLM agent (or programmatic mutator) proposes a hyperparameter edit
+         │
+         ▼
+  2. Coherence gate  config parses / in bounds?   ── no ──►  CULL  (discard, no eval spent)
+         │ yes
+         ▼
+  3. Evaluate        really train the model  →  noisy validation score
+         │
+         ▼
+  4. Accept policy   greedy:  score > incumbent ?
+                     causal:  re-test over k seeds, gain clears the noise band ?
+         │
+         ├── yes ──►  ACCEPT  (candidate becomes the new incumbent)
+         └── no  ──►  DISCARD (revert to the incumbent)
+         │
+         ▼  (loop back to step 1 with the remaining budget)
+
+when the budget is exhausted:
+
+  5. Ship the final config  →  held-out TEST  +  replication audit
+     (these live OUTSIDE the loop; the agent and the gate never see them)
 ```
 
 The proposer, evaluation, and budget are identical across arms; swapping the
