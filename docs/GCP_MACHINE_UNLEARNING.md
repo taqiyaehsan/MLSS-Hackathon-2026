@@ -148,6 +148,55 @@ Use it to size budgets below.
 
 ---
 
+## 6b. Verify the eval is STATIONARY (REQUIRED before trusting any number)
+
+This is the gate that makes MU numbers usable. On the laptop (MPS) the same
+baseline code scored anywhere from 0.001 to 0.117 depending only on *when* it ran
+(thermal/contention drift) — so laptop MU numbers are invalid. The V100 is
+*expected* to be stationary, but **confirm it on this box before quoting anything.**
+
+Run the baseline-noise characterization **twice, in separated time windows** (e.g.
+now and again after a couple of full arm runs), and compare:
+
+```bash
+python baseline_noise.py --n 8 --run-id baseline_noise_A
+# ... later, after other runs have loaded the GPU ...
+python baseline_noise.py --n 8 --run-id baseline_noise_B
+```
+
+Open each `results/baseline_noise_{A,B}/summary.json`. **Stationary** = the two
+windows' means agree within their own std (a tight band, e.g. both ≈0.054 ±0.001),
+and per-eval wall-time does not drift. If window B's mean has shifted far outside
+window A's band, the eval is **non-stationary on this box too** — stop, and don't
+report sequential greedy-vs-causal scores until it's controlled (seed torch +
+`torch.use_deterministic_algorithms`, or interleave arm eval order). Keep
+`baseline_noise_A` — it's also the noise band the replication audit needs.
+
+---
+
+## ⭐ Poster recipe (the trustworthy quantitative MU number)
+
+For the 6/24 poster, run **in this order** and prefer the lowest-risk numbers:
+
+1. **6b stationarity check passes** — otherwise nothing below is quotable.
+2. **Use `--fidelity full` for every headline run.** It runs the full 10 inner
+   models (the benchmark's real setting) and sidesteps the unvalidated 0.3
+   cost-weight entirely. Only touch `--fidelity cheap` for a *separate* cost-lever
+   demo, and only after validating the weight (Section 7).
+3. **The replication audit (Section 8) is the strongest MU result** — it is a
+   *within-arm* re-test ("how many of greedy's accepted wins vanish on re-test on
+   the real named benchmark"), so it is immune to the live-arm divergence caveat
+   below. This is the real-benchmark version of the "single evals lie" story.
+4. A **head-to-head greedy-vs-causal** run is a nice complement, but note the
+   caveat: `run_mlrc.py` runs *live* closed-loop arms, so the two arms diverge
+   (different accepts → different proposals). That makes a raw score *difference*
+   partly a path effect, not pure policy isolation. The clean paired-ablation
+   (replay) design lives in the local `study.py` pipeline (FashionMNIST/MAGIC), not
+   here — so frame the MU head-to-head as corroborating, and let the replication
+   audit + the local replay results carry the rigorous claim.
+
+---
+
 ## 7. Full runs — greedy vs the skeptic
 
 Budget unit = **one full eval** (one seed). Accounting:
