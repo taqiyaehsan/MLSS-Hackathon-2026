@@ -20,6 +20,7 @@ This repo contains:
 - [Setup](#setup)
 - [Running on Google Cloud (GPU)](#running-on-google-cloud-gpu)
 - [Running the autoresearcher](#running-the-autoresearcher)
+- [Code-editing agent: plug-and-play tasks (the main pipeline)](#code-editing-agent-plug-and-play-tasks-the-main-pipeline)
 - [Real local tasks: agentic hyperparameter search (FashionMNIST, MAGIC, digits)](#real-local-tasks-agentic-hyperparameter-search-fashionmnist-magic-digits)
 - [Results: end-to-end vanilla autoresearcher](#results-end-to-end-vanilla-autoresearcher)
 - [Suggested skeptic wrapper (causal + coherence)](#suggested-skeptic-wrapper-causal--coherence)
@@ -269,7 +270,91 @@ See `skeptic_gate/README.md` for details. Figures land in `results/synthetic_fig
 
 ---
 
+## Code-editing agent: plug-and-play tasks (the main pipeline)
+
+Each task is a tiny self-contained repo under `skeptic_gate/tasks/<name>/`: a
+**problem statement** (`background.md`) + a **working but mediocre baseline**
+(`baseline_method.py`, the "primary code") + a data loader (in `task_data.py`) +
+a registered `TaskSpec`. **One LLM agent (`gpt-4.1-mini`) per task EDITS the
+baseline code** to raise a held-out metric. The same task-agnostic `gates.py`
+wraps the loop — a **coherence gate** culls edits that don't parse / keep the
+interface (cheap), and the **causal gate** re-tests a gain before believing it.
+
+```
+the ONE code-editing agent, looping:
+  read  background.md + current best MyMethod.py + history
+  write a COMPLETE edited MyMethod.py        (e.g. logistic -> MLP, linear -> CNN)
+        │
+  coherence gate: parses / keeps fit·predict?   no -> cull (no eval spent)
+        │ yes
+  harness: train it, score it (held-out val)    ← run_method.py (CPU, seeded, timeout)
+        │
+  accept gate (greedy | causal): keep or revert
+        │ repeat to budget
+```
+
+The harness owns data, the held-out **test** split, the seed, CPU + timeout, and
+scoring — so numbers stay reproducible and stationary no matter what the agent
+writes. The agent owns only the model + training inside `MyMethod`.
+
+### Reference tasks (proven measurable progress)
+
+| task | modality | metric | the agent's edit | held-out result |
+|---|---|---|---|---|
+| `fashionmnist` | vision | accuracy | linear → CNN | 0.75 → **0.87** |
+| `magic` | tabular | accuracy | logistic → MLP | 0.786 → **0.844** |
+| `example_regression` | tabular | R² | linear (template) | 0.30 baseline |
+
+### Run
+
+```bash
+cd skeptic_gate
+# test a baseline through the harness (no API)
+../.venv/bin/python run_method.py --task magic \
+    --method tasks/magic/baseline_method.py --metric accuracy
+
+# the full study: agent writes methods, then the analysis
+#   study.py <task> [llm] [N_PROPOSALS] [N_SEEDS]   (omit 'llm' for a FREE mock run)
+../.venv/bin/python study.py fashionmnist llm 8 8
+../.venv/bin/python study.py example_regression llm 8 8   # regression (R²)
+```
+
+### Two analysis outputs (`study.py`)
+
+1. **Skeptic ablation (replay):** the agent's candidate stream is generated once
+   and re-scored over seeds; greedy and causal are then replayed over the
+   **identical** candidates + measurements — a clean paired ablation (live arms
+   would diverge and confound it). A **replication audit** reports how many
+   accepted "wins" **vanish** on honest re-test.
+2. **Pareto frontier over the methods the agent wrote** (not a fixed menu): 3
+   axes — accuracy (multi-seed mean ↑), stability (std ↓), cost (FLOPs ↓, with
+   wall-clock as context). The frontier is **reported, not auto-picked** — you
+   choose by your accuracy / cost / reliability priorities. The held-out test is
+   touched once per point (report only, never to build the frontier).
+
+### Add a new task (plug-and-play)
+
+1. **`task_data.py`** — add `load_<name>()` returning the six CPU tensors
+   `X_tr/y_tr/X_va/y_va/X_te/y_te` (features `float32`; labels `int64` for
+   classification, `float32` for regression — pass `regression=True` to the
+   split/pack helpers). Register it in `LOADERS` under `<name>`.
+2. **`tasks/<name>/background.md`** — problem statement + approach space + the
+   hard rules (the `fit`/`predict` contract).
+3. **`tasks/<name>/baseline_method.py`** — a working, deliberately-mediocre
+   `class MyMethod(BaseMethod)` with `fit(self, X, y, seed)` and `predict(self, X)`.
+4. **`local_task.py`** — add `TaskSpec("<name>", time_limit=…, regimes=[…],
+   metric="accuracy"|"r2")` to `TASKS`.
+
+Then `../.venv/bin/python study.py <name> llm` runs the identical pipeline on your
+task. (`base_method.py` is the interface; `run_method.py` the harness; `study.py`
+the analysis — none of them change when you add a task.)
+
+---
+
 ## Real local tasks: agentic hyperparameter search (FashionMNIST, MAGIC, digits)
+
+> Secondary / alternative pipeline: instead of editing code, the agent tunes a
+> **fixed MLP's hyperparameters**. Kept for the controlled noise-regime sweep.
 
 This is the cheap, **stationary**, fully-local counterpart to the MLRC run. The
 same skeptic gates drive an agent that tunes a **fixed MLP** on a real dataset —
