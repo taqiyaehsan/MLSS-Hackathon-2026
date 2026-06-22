@@ -28,13 +28,13 @@ All numbers are reproducible (commands at the bottom). Raw data per task:
 
 ## 2. Pareto frontier (accuracy ↑ / stability ↓ / FLOPs ↓; report, no auto-pick)
 
-- **FashionMNIST:** frontier = {baseline, small CNN (0.88 @ 0.5 GFLOPs), augmentation
-  CNN (0.894 @ 3 GFLOPs), MixUp CNN (0.896 @ 85 TFLOPs)}. The most accurate method
-  costs ~28000× the FLOPs of the cheap CNN for +0.012 accuracy — a stark
+- **FashionMNIST:** frontier = {baseline, small CNN (0.884 @ 510 GFLOPs), augmentation
+  CNN (0.894 @ 2,960 GFLOPs), MixUp CNN (0.896 @ 85,514 GFLOPs)}. The most accurate
+  method costs **~168× the FLOPs of the cheap CNN for +0.012 accuracy** — a stark
   accuracy/compute trade-off.
 - **MAGIC:** 6 of 9 methods non-dominated. The **small MLP wins on accuracy *and*
-  cost** (0.871 @ 0.20 GFLOPs); the agent's deeper MLPs spent 13–23× more FLOPs to do
-  *worse* — a clean "more compute ≠ better" point.
+  cost** (0.871 @ 0.20 GFLOPs); the agent's deeper MLPs spent **~12–23× more FLOPs to
+  do *worse*** — a clean "more compute ≠ better" point.
 
 ## 3. The skeptic result — causal beats greedy under noise (BOTH tasks)
 
