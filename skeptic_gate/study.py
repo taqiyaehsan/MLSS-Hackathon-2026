@@ -125,20 +125,31 @@ def score_matrix(spec: LT.TaskSpec, pool: list[dict], n_seeds: int,
     metric = spec.metric
     mat, meta = [], []
     for c in pool:
-        cls = _load_class(c["code"], tmpdir / f"cand_{c['idx']}.py")
-        vals, walls = [], []
-        for s in range(n_seeds):
-            m = cls(); t0 = time.time(); m.fit(Xtr, ytr, SEED0 + s)
-            walls.append(time.time() - t0)
-            vals.append(run_method._score(metric, m.predict(data["X_va"]), data["y_va"]))
-        mt = cls(); mt.fit(Xtr, ytr, SEED0 + 999)
-        test = run_method._score(metric, mt.predict(data["X_te"]), data["y_te"])
+        # A method can pass the (static) coherence gate yet crash at RUNTIME (e.g.
+        # torch.zeros(..., generator=g)). Generation catches this via the subprocess
+        # harness; here we run in-process, so guard each method and score a crash as
+        # CRASH_SCORE rather than aborting the whole study (the "automated debugging"
+        # story: broken edits fail loudly but cheaply, they don't kill the run).
+        try:
+            cls = _load_class(c["code"], tmpdir / f"cand_{c['idx']}.py")
+            vals, walls = [], []
+            for s in range(n_seeds):
+                m = cls(); t0 = time.time(); m.fit(Xtr, ytr, SEED0 + s)
+                walls.append(time.time() - t0)
+                vals.append(run_method._score(metric, m.predict(data["X_va"]), data["y_va"]))
+            mt = cls(); mt.fit(Xtr, ytr, SEED0 + 999)
+            test = run_method._score(metric, mt.predict(data["X_te"]), data["y_te"])
+            flops = _measure_flops(cls, Xtr, ytr)
+        except Exception as e:  # noqa: BLE001 - any failure in agent code -> crash score
+            print(f"    [score_matrix] idx {c['idx']} crashed: {type(e).__name__}: {e}")
+            vals = [float(LT.CRASH_SCORE)] * n_seeds
+            walls = [0.0]; test = float(LT.CRASH_SCORE); flops = -1
         mat.append(vals)
         meta.append({"idx": c["idx"], "intent": c["intent"], "code": c["code"],
                      "acc": float(np.mean(vals)),
                      "stability": float(np.std(vals, ddof=1)) if n_seeds > 1 else 0.0,
                      "test": float(test), "wall_ms": float(np.median(walls) * 1000),
-                     "flops": _measure_flops(cls, Xtr, ytr)})
+                     "flops": flops})
     return np.array(mat), meta
 
 
