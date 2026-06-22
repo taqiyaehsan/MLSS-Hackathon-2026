@@ -50,7 +50,8 @@ evaluation are held identical, so the comparison is a clean paired ablation.
 ### The full pipeline
 
 ```
-PART A — the code-editing agent loop (one LLM agent per task, greedy-guided)
+PART A — the code-editing agent loop (one LLM agent per task)
+         the skeptic = the COHERENCE gate (step 2) + the ACCEPT gate (step 4)
 
 repeat until the proposal budget runs out:
 
@@ -58,37 +59,48 @@ repeat until the proposal budget runs out:
          │
          ▼
   2. Coherence gate  parses? keeps fit/predict signature?  ── no ──►  CULL (no eval spent)
-         │ yes
+         │ yes                                                        [SKEPTIC, part 1]
          ▼
   3. Evaluate        really train the method  →  noisy validation score
          │
          ▼
-  4. Greedy guide    score > best ? → adopt as incumbent (steers the next proposal)
+  4. Accept gate     ┌ greedy:  score > incumbent ?                   [SKEPTIC, part 2]
+     (swappable)     └ causal:  re-test over k seeds; gain clears the noise band ?
+         │
+         ├── yes ──►  ACCEPT  (candidate becomes the new incumbent, steers next proposal)
+         └── no  ──►  DISCARD (keep the incumbent)
          │
          ▼  record EVERY coherent method it wrote = the candidate stream
             (loop back to step 1 with the remaining budget)
 
-PART B — analysis over the FIXED candidate stream (NO new agent calls)
+PART B — skeptic ablation + selection over the FIXED candidate stream (NO new agent calls)
 
   5. Score matrix    re-score each method over S seeds (val) + one-touch TEST + FLOPs
          │
-         ├─►  6a. Replay ablation   replay greedy AND causal over the IDENTICAL
-         │            candidates + measurements (pure policy isolation), then a
+         ├─►  6a. Replay ablation   replay the greedy AND causal accept gates over the
+         │            IDENTICAL candidates + measurements (pure policy isolation), then a
          │            replication audit: which accepted gains vanish vs the full-seed truth
          │
          ├─►  6b. Pareto frontier   accuracy ↑ / stability ↓ / FLOPs ↓  (report, no auto-pick)
          │
-         └─►  6c. Regime sweep      dial up evaluation noise; measure greedy vs causal
-                     false-positive rate  →  when does skepticism pay?
+         └─►  6c. Regime sweep      dial up evaluation noise; measure the greedy vs causal
+                     accept gate's false-positive rate  →  when does skepticism pay?
 ```
 
-**Part A** is the autonomous researcher: the proposer, evaluation, and budget are
-identical across arms, and the agent runs **once** to produce a candidate stream.
-**Part B** is the analysis, run over that fixed stream so that swapping the accept
-policy (greedy / causal) is the *only* change — a clean paired ablation with no
-extra LLM calls. The held-out test split and the many-seed replication audit live
-**outside** the loop; the agent and the gate never see them, so reported progress
-can't be selection-on-the-eval-set. The regime sweep (6c) is the headline result —
+**The skeptic = the coherence gate (step 2, culls broken edits before any eval) +
+the accept gate (step 4, greedy vs causal).** The accept gate is where the two arms
+differ: greedy believes a single noisy score; causal re-tests over k seeds and
+accepts only if the gain clears the noise band.
+
+To compare the two gates *honestly*, Part A runs **once** (with the greedy gate) to
+produce a candidate stream, then **Part B replays both the greedy and the causal
+accept gate over that identical stream and its measurements** — so the accept rule
+is the *only* thing that changes (a clean paired ablation, no extra LLM calls).
+Running two live loops instead would diverge — different accepts → different
+proposals → confounded — which is exactly why the comparison is done by replay. The
+held-out test split and the many-seed replication audit live **outside** the loop;
+the agent and the gates never see them, so reported progress can't be
+selection-on-the-eval-set. The regime sweep (6c) is the headline result —
 see [`docs/SKEPTIC_REGIME_RESULTS.md`](docs/SKEPTIC_REGIME_RESULTS.md).
 
 ---
