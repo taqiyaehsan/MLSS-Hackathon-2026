@@ -32,6 +32,7 @@ Run:  python regime_sweep.py <task> [eval|train] [N_SEEDS] [R_TRIALS] [LEVELS]
 """
 from __future__ import annotations
 
+import csv
 import json
 import sys
 import time
@@ -187,7 +188,22 @@ def sweep(task: str, mode: str, n_seeds: int, r_trials: int, levels: list) -> di
     out = {"task": task, "mode": mode, "n_seeds": n_seeds, "r_trials": r_trials,
            "truth": truth.tolist(), "points": points}
     (HERE / f"results/study_{task}/regime_{mode}.json").write_text(json.dumps(out, indent=2))
-    print(f"  saved -> results/study_{task}/regime_{mode}.json")
+    cpath = HERE / f"results/study_{task}/regime_{mode}.csv"
+    with cpath.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["task", "mode", "level", "noise_std",
+                    "greedy_fp_rate", "greedy_mean_vanished", "greedy_max_vanished",
+                    "greedy_mean_final_acc",
+                    "causal_fp_rate", "causal_mean_vanished", "causal_max_vanished",
+                    "causal_mean_final_acc"])
+        for p in points:
+            g, c = p["greedy"], p["causal"]
+            w.writerow([task, mode, p["level"], f"{p['noise_std']:.6f}",
+                        f"{g['fp_rate']:.4f}", f"{g['mean_vanished']:.4f}",
+                        g["max_vanished"], f"{g['mean_final_acc']:.6f}",
+                        f"{c['fp_rate']:.4f}", f"{c['mean_vanished']:.4f}",
+                        c["max_vanished"], f"{c['mean_final_acc']:.6f}"])
+    print(f"  saved -> results/study_{task}/regime_{mode}.json + .csv")
     return out
 
 

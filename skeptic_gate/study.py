@@ -28,6 +28,7 @@ Run:  python study.py <task> [llm] [N_PROPOSALS] [N_SEEDS]
 
 from __future__ import annotations
 
+import csv
 import json
 import sys
 import time
@@ -42,7 +43,7 @@ import torch
 import task_data
 import run_method
 import local_task as LT
-from gates import Budget, GreedyPolicy, CausalPolicy, run_loop
+from gates import Budget, GreedyPolicy, CausalPolicy, Incumbent, run_loop
 
 HERE = Path(__file__).resolve().parent
 RESULTS_DIR = HERE / "results"
@@ -55,14 +56,23 @@ SEED0 = 90_000
 
 def generate_pool(spec: LT.TaskSpec, n_proposals: int, model: str, mock_llm: bool,
                   snapshot_dir: Path) -> list[dict]:
-    """Run the code-editing agent greedily, recording EVERY coherent method it
-    writes (baseline included). One eval/proposal just guides the greedy incumbent
-    so the agent builds sensibly; the trusted scoring happens later in the matrix."""
+    """Run the code-editing agent with the PROPOSED skeptic (the CAUSAL accept gate)
+    driving the incumbent, recording EVERY coherent method it writes (baseline
+    included). The incumbent the agent is shown only advances when a gain clears the
+    causal noise band -- so the exploration reflects the proposed system, and greedy
+    is left as a pure comparison baseline replayed later (Part B). The trusted scoring
+    for the ablation/Pareto still happens in the matrix; this loop's evals only steer
+    generation."""
     proposer = None if mock_llm else LT.OpenAIProposer(spec, model=model)
     world = LT.LocalTaskWorld(spec, proposer, snapshot_dir, mock_llm=mock_llm)
     pool = [{"idx": 0, "code": spec.baseline_code, "intent": "baseline"}]
-    base = world.evaluate(LT.Candidate(code=spec.baseline_code, intent="baseline"), 5000)
-    world.best_score = base
+    policy = CausalPolicy(k0=2, k_max=6, z=1.0)
+    evaluate = lambda c, s: world.evaluate(c, s)
+    # seed the incumbent with the baseline's OWN measured scores (>=2 for a band)
+    base_cand = LT.Candidate(code=spec.baseline_code, intent="baseline")
+    incumbent = Incumbent(scores=[evaluate(base_cand, 5000 + j) for j in range(policy.k0)])
+    world.best_score = incumbent.mean
+    budget = Budget(n_proposals * policy.k_max + 10)   # plenty for the inner seeds
     idx = 1
     for step in range(n_proposals):
         cand = world.propose()
@@ -72,14 +82,18 @@ def generate_pool(spec: LT.TaskSpec, n_proposals: int, model: str, mock_llm: boo
             world.history.append({"intent": cand.intent, "score": None, "accepted": False})
             print(f"    step {step}: CULLED ({cand.static_reason})")
             continue
-        score = world.evaluate(cand, 6000 + step)
+        dec = policy.decide(cand, evaluate, incumbent, budget, seed0=6000 + step * 10)
         pool.append({"idx": idx, "code": cand.code, "intent": cand.intent}); idx += 1
-        accepted = score is not None and score > world.best_score
-        if accepted:
-            world.best_code = cand.code; world.best_score = score
-        world.history.append({"intent": cand.intent, "score": score, "accepted": accepted})
-        print(f"    step {step}: {'ACCEPT' if accepted else 'reject'} "
-              f"score={score:.4f}  {cand.intent[:60]}")
+        mean_sc = (sum(dec.candidate_scores) / len(dec.candidate_scores)
+                   if dec.candidate_scores else None)
+        if dec.accepted:
+            world.best_code = cand.code
+            incumbent.scores = dec.candidate_scores      # incumbent adopts its seed scores
+            world.best_score = incumbent.mean
+        world.history.append({"intent": cand.intent, "score": mean_sc, "accepted": dec.accepted})
+        sc = f"{mean_sc:.4f}" if mean_sc is not None else "n/a"
+        print(f"    step {step}: {'ACCEPT' if dec.accepted else 'reject'} "
+              f"({dec.reason}, {len(dec.candidate_scores)} seeds) mean={sc}  {cand.intent[:50]}")
     return pool
 
 
@@ -255,9 +269,45 @@ def run_study(task: str, *, use_llm: bool = False, model: str = "gpt-4.1-mini",
            "replay": arms, "frontier_idx": sorted(front_idx), "methods": meta,
            "wall_s": time.time() - t0}
     outdir = RESULTS_DIR / f"study_{task}"
-    (outdir / ("llm.json" if use_llm else "mock.json")).write_text(json.dumps(out, indent=2))
+    tag = "llm" if use_llm else "mock"
+    (outdir / f"{tag}.json").write_text(json.dumps(out, indent=2))
+    _write_csvs(outdir, tag, task, spec.metric, meta, front_idx, arms)
     print(f"\n  saved -> {outdir}  (wall {out['wall_s']:.1f}s)")
     return out
+
+
+def _write_csvs(outdir: Path, tag: str, task: str, metric: str, meta: list[dict],
+                front_idx: set, arms: dict) -> None:
+    """Dump every number to CSV: the per-method score/Pareto table, and the per-accept
+    replay audit for both gates (greedy baseline vs causal)."""
+    mpath = outdir / f"methods_{tag}.csv"
+    with mpath.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["task", "idx", "intent", "metric", "acc_val_mean", "stability_std",
+                    "test", "flops", "gflops", "wall_ms", "on_frontier"])
+        for r in sorted(meta, key=lambda r: -r["acc"]):
+            w.writerow([task, r["idx"], r["intent"], metric, f"{r['acc']:.6f}",
+                        f"{r['stability']:.6f}", f"{r['test']:.6f}", r["flops"],
+                        f"{r['flops']/1e9:.4f}", f"{r['wall_ms']:.1f}",
+                        int(r["idx"] in front_idx)])
+    rpath = outdir / f"replay_{tag}.csv"
+    with rpath.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["task", "arm", "n_accepted", "n_vanished", "n_survive",
+                    "accept_idx", "prev_idx", "apparent", "true_before", "true_after",
+                    "true_gain", "survives"])
+        for arm in ("greedy", "causal"):
+            a = arms[arm]
+            if not a["accepts"]:
+                w.writerow([task, arm, a["n_accepted"], a["n_vanished"], a["n_survive"],
+                            "", "", "", "", "", "", ""])
+            for acc in a["accepts"]:
+                w.writerow([task, arm, a["n_accepted"], a["n_vanished"], a["n_survive"],
+                            acc["idx"], acc["prev_idx"],
+                            f"{acc.get('apparent', float('nan')):.6f}",
+                            f"{acc['true_before']:.6f}", f"{acc['true_after']:.6f}",
+                            f"{acc['true_gain']:.6f}", int(acc["survives"])])
+    print(f"  csv  -> {mpath.name}, {rpath.name}")
 
 
 if __name__ == "__main__":
