@@ -137,7 +137,8 @@ skeptic-gate/
 │   ├── synthetic.py / experiment.py / plots.py / sanity.py / tests.py
 │   └── README.md                 ← notes on the controlled synthetic study
 ├── results/
-│   ├── skeptic_regime/           ← THE skeptic result: regime curve + code-edit study + figure
+│   ├── skeptic_regime/<task>/    ← THE skeptic result per task (fashionmnist, magic):
+│   │                                llm.json, methods/replay/regime CSVs, regime_curve_eval.png
 │   ├── vanilla_autoresearch_run/ ← end-to-end greedy run (summary, per-step log, every proposal)
 │   ├── baseline_observation/     ← repeated baseline evals from different time windows
 │   └── synthetic_figs/           ← figures from the controlled synthetic study

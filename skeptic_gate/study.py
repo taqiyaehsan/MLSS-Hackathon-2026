@@ -256,7 +256,10 @@ def run_study(task: str, *, use_llm: bool = False, model: str = "gpt-4.1-mini",
     print("3) replaying SAME gates (greedy vs causal) over identical candidates...")
     arms = {a: replay(a, mat, pool) for a in ("greedy", "causal")}
 
-    front = pareto(meta)
+    # crashed methods (CRASH_SCORE) must not sit on the frontier: their stub
+    # stability=0 / flops=-1 look "optimal" on two axes. Exclude failures first.
+    valid = [r for r in meta if r["acc"] > LT.CRASH_SCORE / 2]
+    front = pareto(valid)
     front_idx = {r["idx"] for r in front}
 
     higher = "R^2" if spec.metric == "r2" else "acc"

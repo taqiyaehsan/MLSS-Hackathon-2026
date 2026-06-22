@@ -1,0 +1,8 @@
+task,mode,level,noise_std,greedy_fp_rate,greedy_mean_vanished,greedy_max_vanished,greedy_mean_final_acc,causal_fp_rate,causal_mean_vanished,causal_max_vanished,causal_mean_final_acc
+magic,eval,2000,0.008030,0.3050,0.3350,2,0.871573,0.0600,0.0600,1,0.872760
+magic,eval,1000,0.008619,0.3650,0.4750,3,0.870808,0.1300,0.1300,1,0.872373
+magic,eval,500,0.015584,0.4050,0.5450,3,0.870310,0.1950,0.2050,2,0.871975
+magic,eval,200,0.015858,0.5050,0.5750,3,0.869290,0.1850,0.1900,2,0.871810
+magic,eval,100,0.028085,0.5400,0.5800,2,0.867588,0.2350,0.2400,2,0.871150
+magic,eval,50,0.037281,0.5350,0.5600,2,0.864010,0.2350,0.2400,2,0.871160
+magic,eval,25,0.069422,0.4100,0.4150,2,0.857270,0.1700,0.1750,2,0.867818

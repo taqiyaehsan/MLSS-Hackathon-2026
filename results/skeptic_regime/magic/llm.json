@@ -1,0 +1,145 @@
+{
+  "task": "magic",
+  "metric": "accuracy",
+  "proposer": "LLM agent (gpt-4.1-mini)",
+  "n_proposals": 8,
+  "n_seeds": 5,
+  "pool_size": 9,
+  "replay": {
+    "greedy": {
+      "arm": "greedy",
+      "n_accepted": 1,
+      "n_vanished": 0,
+      "n_survive": 1,
+      "accepts": [
+        {
+          "idx": 1,
+          "prev_idx": 0,
+          "apparent": 0.8734999895095825,
+          "true_after": 0.8707000017166138,
+          "true_before": 0.798199999332428,
+          "true_gain": 0.07250000238418575,
+          "survives": true
+        }
+      ]
+    },
+    "causal": {
+      "arm": "causal",
+      "n_accepted": 1,
+      "n_vanished": 0,
+      "n_survive": 1,
+      "accepts": [
+        {
+          "idx": 1,
+          "prev_idx": 0,
+          "apparent": 0.8737500011920929,
+          "true_after": 0.8707000017166138,
+          "true_before": 0.798199999332428,
+          "true_gain": 0.07250000238418575,
+          "survives": true
+        }
+      ]
+    }
+  },
+  "frontier_idx": [
+    0,
+    1,
+    3,
+    5,
+    7,
+    8
+  ],
+  "methods": [
+    {
+      "idx": 0,
+      "intent": "baseline",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.05)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.798199999332428,
+      "stability": 0.002252784103278562,
+      "test": 0.7854999899864197,
+      "wall_ms": 19.269227981567383,
+      "flops": 2400000
+    },
+    {
+      "idx": 1,
+      "intent": "Upgrade to a two-layer MLP with ReLU, weight decay, Adam optimizer, batch training for 20 epochs, and proper seeding to improve classification accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- improved MLP with ReLU, Adam optimizer, weight decay, and longer training.\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # A simple 2-layer MLP with ReLU nonlinearities\n        self.model = nn.Sequential(\n            nn.Linear(d, 32),\n            nn.ReLU(inplace=True),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        # Adam optimizer with weight decay (L2 regularization)\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)\n        loss_fn = nn.CrossEntropyLoss()\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        self.model.train()\n        for epoch in range(20):  # longer training\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, batch_size):\n                idx = perm[i:i + batch_size]\n                opt.zero_grad()\n                loss = loss_fn(self.model(X[idx]), y[idx])\n                loss.backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8707000017166138,
+      "stability": 0.005794406420799671,
+      "test": 0.8675000071525574,
+      "wall_ms": 132.1542263031006,
+      "flops": 199680000
+    },
+    {
+      "idx": 2,
+      "intent": "Add batch normalization, increase model capacity, use cosine annealing LR scheduler, and implement balanced batches to improve held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- enhanced MLP with batch norm, larger capacity, cosine LR schedule, and balanced batching.\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Define model: 3-layer MLP with batch norm and ReLU\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.BatchNorm1d(64),\n            nn.ReLU(inplace=True),\n            nn.Linear(64, 32),\n            nn.BatchNorm1d(32),\n            nn.ReLU(inplace=True),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)\n        loss_fn = nn.CrossEntropyLoss()\n\n        # Cosine annealing LR scheduler for smooth LR decay\n        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=20)\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        # Prepare balanced batches to handle class imbalance (~65% vs 35%)\n        # Separate indices by class\n        idx0 = (y == 0).nonzero(as_tuple=True)[0]\n        idx1 = (y == 1).nonzero(as_tuple=True)[0]\n\n        self.model.train()\n        for epoch in range(20):\n            # Shuffle indices for both classes\n            perm0 = idx0[torch.randperm(len(idx0), generator=g)]\n            perm1 = idx1[torch.randperm(len(idx1), generator=g)]\n\n            # Calculate number of batches\n            n_batches = (n + batch_size - 1) // batch_size\n\n            # Generate balanced batches by sampling roughly equal numbers from each class\n            for batch_i in range(n_batches):\n                # Compute how many samples from each class for this batch\n                n0 = batch_size // 2\n                n1 = batch_size - n0\n\n                # Handle possible shortage at the end\n                start0 = batch_i * n0\n                end0 = min(start0 + n0, len(perm0))\n                start1 = batch_i * n1\n                end1 = min(start1 + n1, len(perm1))\n\n                batch_idx = torch.cat([perm0[start0:end0], perm1[start1:end1]])\n\n                if len(batch_idx) == 0:\n                    continue\n\n                opt.zero_grad()\n                out = self.model(X[batch_idx])\n                loss = loss_fn(out, y[batch_idx])\n                loss.backward()\n                opt.step()\n\n            scheduler.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8333999991416932,
+      "stability": 0.008827516630034367,
+      "test": 0.8330000042915344,
+      "wall_ms": 385.3309154510498,
+      "flops": 1559147520
+    },
+    {
+      "idx": 3,
+      "intent": "Add a hidden layer with GELU activations, apply dropout for regularization, increase hidden layer size, use cosine annealing LR scheduler, and balanced batch sampling to improve held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- improved MLP with GELU, dropout, Adam optimizer, cosine LR scheduler, and balanced batches.\"\"\"\n\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Define a 3-layer MLP with GELU activations and dropout\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.GELU(),\n            nn.Dropout(p=0.2),\n            nn.Linear(64, 32),\n            nn.GELU(),\n            nn.Dropout(p=0.2),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)\n        # Cosine annealing LR scheduler with T_max=20 epochs\n        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=20)\n        loss_fn = nn.CrossEntropyLoss()\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        # For balanced batches: precompute indices per class\n        class0_idx = (y == 0).nonzero(as_tuple=True)[0]\n        class1_idx = (y == 1).nonzero(as_tuple=True)[0]\n        n0 = len(class0_idx)\n        n1 = len(class1_idx)\n\n        self.model.train()\n        for epoch in range(20):\n            # Shuffle class indices separately\n            perm0 = class0_idx[torch.randperm(n0, generator=g)]\n            perm1 = class1_idx[torch.randperm(n1, generator=g)]\n\n            # Number of batches based on smaller class\n            batches = max(n0, n1) // (batch_size // 2) + 1\n\n            for i in range(batches):\n                start0 = i * (batch_size // 2)\n                end0 = start0 + (batch_size // 2)\n                start1 = i * (batch_size // 2)\n                end1 = start1 + (batch_size // 2)\n\n                batch_idx0 = perm0[start0:end0]\n                batch_idx1 = perm1[start1:end1]\n\n                # If running out of examples, wrap around\n                if len(batch_idx0) < (batch_size // 2):\n                    batch_idx0 = torch.cat([batch_idx0, perm0[:(batch_size // 2) - len(batch_idx0)]])\n                if len(batch_idx1) < (batch_size // 2):\n                    batch_idx1 = torch.cat([batch_idx1, perm1[:(batch_size // 2) - len(batch_idx1)]])\n\n                idx = torch.cat([batch_idx0, batch_idx1])\n\n                opt.zero_grad()\n                loss = loss_fn(self.model(X[idx]), y[idx])\n                loss.backward()\n                opt.step()\n            scheduler.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8622999906539917,
+      "stability": 0.005674505116824785,
+      "test": 0.8560000061988831,
+      "wall_ms": 299.06368255615234,
+      "flops": 2378629120
+    },
+    {
+      "idx": 4,
+      "intent": "Improve the MLP by adding a hidden layer with GELU activation, layer normalization, dropout, class-balanced weighted loss, LR scheduler, and increase training epochs for better held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- enhanced MLP with GELU, layer norm, dropout, weighted loss, LR scheduler, and longer training.\"\"\"\n\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Define a 3-layer MLP with GELU activations, LayerNorm and Dropout\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.LayerNorm(64),\n            nn.GELU(),\n            nn.Dropout(0.2),\n            nn.Linear(64, 32),\n            nn.LayerNorm(32),\n            nn.GELU(),\n            nn.Dropout(0.2),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        # Handle class imbalance by weighting the loss\n        class_counts = torch.bincount(y)\n        class_weights = 1.0 / (class_counts.float() + 1e-6)\n        class_weights = class_weights / class_weights.sum() * 2  # normalize weights\n        loss_fn = nn.CrossEntropyLoss(weight=class_weights.to(DEVICE))\n\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=1e-4)\n        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=50)\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 64\n\n        self.model.train()\n        for epoch in range(50):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, batch_size):\n                idx = perm[i:i + batch_size]\n                opt.zero_grad()\n                output = self.model(X[idx])\n                loss = loss_fn(output, y[idx])\n                loss.backward()\n                opt.step()\n            scheduler.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8619000077247619,
+      "stability": 0.0037649746820206283,
+      "test": 0.8640000224113464,
+      "wall_ms": 1496.7122077941895,
+      "flops": 4569600000
+    },
+    {
+      "idx": 5,
+      "intent": "Improve the MLP by adding an extra hidden layer, GELU activations, dropout for regularization, increase hidden size, use class-weighted loss to handle imbalance, and extend training epochs with a cosine annealing learning rate scheduler to boost held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- enhanced MLP with 2 hidden layers, GELU, dropout, class-weighted loss, Adam optimizer, cosine annealing LR scheduler, and longer training.\"\"\"\n\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Define a 2-hidden layer MLP with GELU activations and dropout\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.GELU(),\n            nn.Dropout(0.2),\n            nn.Linear(64, 32),\n            nn.GELU(),\n            nn.Dropout(0.2),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        # Compute class weights to handle imbalance\n        labels, counts = torch.unique(y, return_counts=True)\n        weights = torch.zeros(2, device=DEVICE)\n        weights[labels] = n / (2 * counts.float())\n\n        loss_fn = nn.CrossEntropyLoss(weight=weights)\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)\n\n        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=50)\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        self.model.train()\n        for epoch in range(50):  # longer training\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, batch_size):\n                idx = perm[i:i + batch_size]\n                opt.zero_grad()\n                loss = loss_fn(self.model(X[idx]), y[idx])\n                loss.backward()\n                opt.step()\n            scheduler.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8658000111579895,
+      "stability": 0.0031144910044124297,
+      "test": 0.8644999861717224,
+      "wall_ms": 569.4570541381836,
+      "flops": 4569600000
+    },
+    {
+      "idx": 6,
+      "intent": "Add one hidden layer with GELU activation, increase hidden size, add dropout for regularization, use class-weighted loss to better handle imbalance, and train for 30 epochs with Adam optimizer to improve held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- improved MLP with GELU, dropout, class-weighted loss, Adam optimizer, and longer training.\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Calculate class weights to handle imbalance\n        classes, counts = torch.unique(y, return_counts=True)\n        weights = counts.float().max() / counts.float()\n        class_weights = torch.zeros(2, device=DEVICE)\n        class_weights[classes] = weights\n\n        # Define a 3-layer MLP with GELU activations and dropout\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.GELU(),\n            nn.Dropout(0.3),\n            nn.Linear(64, 32),\n            nn.GELU(),\n            nn.Dropout(0.3),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=1e-4)\n        loss_fn = nn.CrossEntropyLoss(weight=class_weights)\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        self.model.train()\n        for epoch in range(30):  # longer training\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, batch_size):\n                idx = perm[i:i + batch_size]\n                opt.zero_grad()\n                loss = loss_fn(self.model(X[idx]), y[idx])\n                loss.backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8611000061035157,
+      "stability": 0.005424486422985877,
+      "test": 0.8539999723434448,
+      "wall_ms": 339.98799324035645,
+      "flops": 2741760000
+    },
+    {
+      "idx": 7,
+      "intent": "Enhance the MLP with an additional hidden layer, GELU activations, dropout for regularization, class-weighted loss to address class imbalance, and train with Adam and cosine annealing LR scheduler for improved held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- improved MLP with two hidden layers, GELU, dropout, class weighted loss, Adam optimizer, and cosine annealing LR scheduler.\"\"\"\n\nimport torch\nimport torch.nn as nn\nimport torch.optim.lr_scheduler as lr_scheduler\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Two hidden layers MLP with GELU activations and dropout\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.GELU(),\n            nn.Dropout(0.2),\n            nn.Linear(64, 32),\n            nn.GELU(),\n            nn.Dropout(0.2),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        # Compute class weights to handle class imbalance\n        classes, counts = torch.unique(y, return_counts=True)\n        weights = counts.float().sum() / (counts.float() * len(classes))\n        class_weights = weights.to(DEVICE)\n\n        loss_fn = nn.CrossEntropyLoss(weight=class_weights)\n\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)\n        scheduler = lr_scheduler.CosineAnnealingLR(opt, T_max=30)\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        self.model.train()\n        for epoch in range(30):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, batch_size):\n                idx = perm[i:i + batch_size]\n                opt.zero_grad()\n                loss = loss_fn(self.model(X[idx]), y[idx])\n                loss.backward()\n                opt.step()\n            scheduler.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8654000043869019,
+      "stability": 0.0035426090920765174,
+      "test": 0.8604999780654907,
+      "wall_ms": 366.53614044189453,
+      "flops": 2741760000
+    },
+    {
+      "idx": 8,
+      "intent": "Add a hidden layer with GELU activations and dropout for regularization, increase hidden layer size, use class-weighted loss to address class imbalance, and extend training to 30 epochs with a cosine annealing learning rate scheduler to improve held-out accuracy.",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- enhanced MLP with two hidden layers, GELU, dropout, class-weighted loss, Adam optimizer, cosine annealing LR scheduler, and longer training.\"\"\"\n\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n\n        # Determine class weights to handle imbalance\n        classes, counts = torch.unique(y, return_counts=True)\n        weight = torch.zeros(2, device=DEVICE)\n        for c, cnt in zip(classes, counts):\n            weight[c] = 1.0 / cnt\n        weight /= weight.sum()\n\n        # Define a 3-layer MLP with GELU activations and dropout\n        self.model = nn.Sequential(\n            nn.Linear(d, 64),\n            nn.GELU(),\n            nn.Dropout(0.3),\n            nn.Linear(64, 32),\n            nn.GELU(),\n            nn.Dropout(0.3),\n            nn.Linear(32, 2),\n        ).to(DEVICE)\n\n        loss_fn = nn.CrossEntropyLoss(weight=weight)\n        opt = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=1e-4)\n        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=30)\n\n        g = torch.Generator().manual_seed(seed)\n        batch_size = 128\n\n        self.model.train()\n        for epoch in range(30):  # longer training\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, batch_size):\n                idx = perm[i:i + batch_size]\n                opt.zero_grad()\n                loss = loss_fn(self.model(X[idx]), y[idx])\n                loss.backward()\n                opt.step()\n            scheduler.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8626000046730041,
+      "stability": 0.0011401646666189145,
+      "test": 0.8610000014305115,
+      "wall_ms": 348.3471870422363,
+      "flops": 2741760000
+    }
+  ],
+  "wall_s": 599.0193152427673
+}
