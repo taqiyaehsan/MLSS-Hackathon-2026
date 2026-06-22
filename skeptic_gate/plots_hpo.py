@@ -13,6 +13,7 @@ a single-seed summary just plots the point estimates.
 
 import json
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -21,6 +22,10 @@ import matplotlib.pyplot as plt
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
 FIG_DIR = os.path.join(RESULTS_DIR, "figs")
 os.makedirs(FIG_DIR, exist_ok=True)
+
+# digits keeps the legacy results/hpo_task/ path; other datasets use results/hpo_<name>/.
+def _subdir(dataset):
+    return "hpo_task" if dataset == "digits" else f"hpo_{dataset}"
 
 GREEDY_C, CAUSAL_C = "#c0392b", "#2c6fbf"  # red = chases noise, blue = skeptic
 
@@ -32,8 +37,8 @@ def _get(d, key):
     return d[key], 0.0
 
 
-def fig_hpo_real():
-    with open(os.path.join(RESULTS_DIR, "hpo_task", "summary.json")) as f:
+def fig_hpo_real(dataset="digits"):
+    with open(os.path.join(RESULTS_DIR, _subdir(dataset), "summary.json")) as f:
         S = json.load(f)
     sweep = S["sweep"]
     sds = [r["eval_sd"] for r in sweep]
@@ -51,10 +56,12 @@ def fig_hpo_real():
 
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.6))
     seeds = S.get("n_seeds", 1)
-    fig.suptitle(f"Real task: MLP hyperparameter search on sklearn digits "
-                 f"(same gates.py as the synthetic; eval really trains a model)"
+    desc = S.get("dataset_desc", S.get("dataset", dataset))
+    fig.suptitle(f"Real task [{S.get('dataset', dataset)}]: MLP hyperparameter "
+                 f"search on {desc} (same gates.py as the synthetic; eval really "
+                 f"trains a model)"
                  + (f"  -  {seeds} outer seeds" if seeds > 1 else "  -  1 seed"),
-                 fontsize=12)
+                 fontsize=10)
 
     # -- Panel 1: false accepts vs noise --
     ax = axes[0]
@@ -96,10 +103,12 @@ def fig_hpo_real():
     ax.legend(fontsize=8); ax.grid(alpha=0.3, axis="y")
 
     fig.tight_layout(rect=[0, 0, 1, 0.95])
-    out = os.path.join(FIG_DIR, "fig_hpo_real.png")
+    # digits keeps the legacy filename; other datasets get a per-dataset figure.
+    name = "fig_hpo_real.png" if dataset == "digits" else f"fig_hpo_{dataset}.png"
+    out = os.path.join(FIG_DIR, name)
     fig.savefig(out, dpi=130)
     print(f"wrote {out}")
 
 
 if __name__ == "__main__":
-    fig_hpo_real()
+    fig_hpo_real(sys.argv[1] if len(sys.argv) > 1 else "digits")

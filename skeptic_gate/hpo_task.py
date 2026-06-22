@@ -41,7 +41,7 @@ import textwrap
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import torch
@@ -59,33 +59,150 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
 
 # ---------------------------------------------------------------------------
-# Data: load once, fixed train / val / test split (test is held out from the
-# whole loop -- the proposer and the gate never see it).
+# Data: pluggable datasets. Each is loaded once into a fixed train / val / test
+# split (test is held out from the whole loop -- the proposer and the gate never
+# see it). The pipeline is dataset-agnostic: an MLP on a flat feature vector, so
+# images are flattened to pixels and tabular features are used directly. This is
+# deliberate -- a CNN would blow the replication-audit budget and the point is a
+# real, cheap, STATIONARY train-and-score loop, not a leaderboard model.
+#
+# Three real testbeds (all real signal, all cheap on CPU, all stationary):
+#   digits  -- sklearn bundled, no download (the smoke-test default)
+#   fmnist  -- FashionMNIST vision, 784 flat pixels (cached, gitignored)
+#   magic   -- MAGIC Gamma Telescope, 10 tabular features, astrophysics / AI4Sci
 # ---------------------------------------------------------------------------
 
-def _load_data():
-    from sklearn.datasets import load_digits
+# Where FashionMNIST is cached (downloaded once; gitignored).
+_FMNIST_ROOT = Path(__file__).resolve().parent / "_data_fmnist"
+
+
+def _split_scale(X, y, scaler_kind: str, seed: int = 0):
+    """Shared helper: fixed stratified 60/20/20 train/val/test split + feature
+    scaling fit on TRAIN only. `scaler_kind`: 'standard' (z-score, for tabular)
+    or 'div255' (image pixels -> [0,1], avoids zero-variance-pixel blowups)."""
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
 
-    X, y = load_digits(return_X_y=True)
-    X = X.astype(np.float32)
-    # fixed split: 60% train, 20% val (the gate's eval set), 20% test (held out)
+    X = np.asarray(X, dtype=np.float32)
+    y = np.asarray(y)
     X_tmp, X_te, y_tmp, y_te = train_test_split(
-        X, y, test_size=0.20, random_state=0, stratify=y)
+        X, y, test_size=0.20, random_state=seed, stratify=y)
     X_tr, X_va, y_tr, y_va = train_test_split(
-        X_tmp, y_tmp, test_size=0.25, random_state=0, stratify=y_tmp)  # 0.25*0.8=0.2
-    scaler = StandardScaler().fit(X_tr)
-    to = lambda A: torch.from_numpy(scaler.transform(A).astype(np.float32))
+        X_tmp, y_tmp, test_size=0.25, random_state=seed, stratify=y_tmp)  # 0.25*0.8=0.2
+    if scaler_kind == "standard":
+        scaler = StandardScaler().fit(X_tr)
+        tf = lambda A: scaler.transform(A).astype(np.float32)
+    elif scaler_kind == "div255":
+        tf = lambda A: (A / 255.0).astype(np.float32)
+    else:
+        raise ValueError(scaler_kind)
+    to = lambda A: torch.from_numpy(tf(A))
     return {
-        "X_tr": to(X_tr), "y_tr": torch.from_numpy(y_tr),
-        "X_va": to(X_va), "y_va": torch.from_numpy(y_va),
-        "X_te": to(X_te), "y_te": torch.from_numpy(y_te),
+        "X_tr": to(X_tr), "y_tr": torch.from_numpy(y_tr.astype(np.int64)),
+        "X_va": to(X_va), "y_va": torch.from_numpy(y_va.astype(np.int64)),
+        "X_te": to(X_te), "y_te": torch.from_numpy(y_te.astype(np.int64)),
     }
 
 
-_DATA = _load_data()
-N_FEATURES, N_CLASSES = 64, 10
+def _load_digits():
+    from sklearn.datasets import load_digits
+    X, y = load_digits(return_X_y=True)
+    return _split_scale(X, y, "standard")
+
+
+def _load_fmnist(n_total: int = 10_000):
+    """FashionMNIST flattened to 784 pixels. Subsample a fixed stratified working
+    set (`n_total`) so each eval stays ~tens of ms and the 30-seed audit is
+    affordable -- the full 60k would make the audit budget explode for no gain to
+    the gate story (we want real noise, not a SOTA model)."""
+    from torchvision import datasets
+    tr = datasets.FashionMNIST(root=str(_FMNIST_ROOT), train=True, download=False)
+    X = tr.data.numpy().reshape(len(tr), -1).astype(np.float32)  # 60000 x 784, 0..255
+    y = tr.targets.numpy()
+    # fixed seeded stratified subsample to n_total, then the shared 60/20/20 split
+    from sklearn.model_selection import train_test_split
+    Xs, _, ys, _ = train_test_split(X, y, train_size=n_total, random_state=0, stratify=y)
+    return _split_scale(Xs, ys, "div255")
+
+
+def _load_magic(n_total: int = 10_000):
+    """MAGIC Gamma Telescope: 10 physical air-shower features, binary classify
+    gamma signal ('g'->0) vs hadron background ('h'->1). Subsampled to a fixed
+    stratified working set for parity with fmnist and a cheap audit."""
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+    d = fetch_openml("MagicTelescope", version=1, as_frame=False)
+    X = d.data.astype(np.float32)
+    y = (np.asarray(d.target) == "h").astype(np.int64)  # h=hadron=1, g=gamma=0
+    Xs, _, ys, _ = train_test_split(X, y, train_size=n_total, random_state=0, stratify=y)
+    return _split_scale(Xs, ys, "standard")
+
+
+@dataclass
+class DatasetSpec:
+    name: str
+    loader: Callable[[], dict]          # -> data dict (X_tr/y_tr/.../X_te/y_te tensors)
+    n_features: int
+    n_classes: int
+    desc: str                            # one line for the LLM proposer brief
+    regimes: list                        # [(label, Fidelity), ...] noise dial: smaller
+                                         #   train_subset => noisier (and cheaper) eval
+
+
+# Per-dataset noise regimes. `train_subset` subsamples the TRAIN split each eval;
+# fewer samples => higher run-to-run variance. cost held at 1.0 across regimes so
+# every arm gets equal proposals at every noise level (see REGIMES note below).
+DATASETS: dict[str, DatasetSpec] = {
+    "digits": DatasetSpec(
+        "digits", _load_digits, 64, 10,
+        "the sklearn `digits` dataset (8x8 handwritten digit images, 64 pixel "
+        "features, 10 classes)",
+        [("low  (full data)", Fidelity("full", 1.0, {"train_subset": None})),
+         ("med  (200 samples)", Fidelity("med", 1.0, {"train_subset": 200})),
+         ("high (80 samples)", Fidelity("high", 1.0, {"train_subset": 80}))]),
+    "fmnist": DatasetSpec(
+        "fmnist", _load_fmnist, 784, 10,
+        "FashionMNIST (28x28 grayscale clothing images flattened to 784 pixel "
+        "features, 10 classes)",
+        [("low  (full data)", Fidelity("full", 1.0, {"train_subset": None})),
+         ("med  (600 samples)", Fidelity("med", 1.0, {"train_subset": 600})),
+         ("high (150 samples)", Fidelity("high", 1.0, {"train_subset": 150}))]),
+    "magic": DatasetSpec(
+        "magic", _load_magic, 10, 2,
+        "the MAGIC Gamma Telescope dataset (10 physical air-shower features; "
+        "binary classification of gamma-ray signal vs hadron background)",
+        [("low  (full data)", Fidelity("full", 1.0, {"train_subset": None})),
+         ("med  (150 samples)", Fidelity("med", 1.0, {"train_subset": 150})),
+         ("high (50 samples)", Fidelity("high", 1.0, {"train_subset": 50}))]),
+}
+
+# Active-dataset module state. Defaults to `digits` so existing callers (smoke
+# test, plots) and the no-arg CLI work unchanged. set_dataset() swaps it.
+_LOAD_CACHE: dict[str, dict] = {}
+ACTIVE: DatasetSpec
+_DATA: dict
+N_FEATURES: int
+N_CLASSES: int
+REGIMES: list
+
+
+def set_dataset(name: str) -> DatasetSpec:
+    """Activate a dataset by name; (re)loads its data (cached) and points the
+    module globals the train/eval functions read at call time."""
+    global ACTIVE, _DATA, N_FEATURES, N_CLASSES, REGIMES
+    if name not in DATASETS:
+        raise ValueError(f"unknown dataset {name!r}; choose from {list(DATASETS)}")
+    spec = DATASETS[name]
+    if name not in _LOAD_CACHE:
+        _LOAD_CACHE[name] = spec.loader()
+    ACTIVE = spec
+    _DATA = _LOAD_CACHE[name]
+    N_FEATURES, N_CLASSES = spec.n_features, spec.n_classes
+    REGIMES = spec.regimes
+    return spec
+
+
+set_dataset("digits")  # default-active on import (cheap, no download)
 
 
 # ---------------------------------------------------------------------------
@@ -260,24 +377,26 @@ class HyperProposer:
 # Mirrors mlrc_adapter.OpenAIProposer; here the edit surface is a config dict.
 # ---------------------------------------------------------------------------
 
-_LLM_BRIEF = textwrap.dedent("""\
-    You are an autonomous ML researcher tuning a small MLP classifier on the
-    sklearn `digits` dataset (8x8 handwritten digits, 10 classes). Each trial
-    trains the MLP from scratch and reports validation accuracy (higher better).
-    Propose ONE new hyperparameter config that you believe will raise val acc.
+def _llm_brief() -> str:
+    """The proposer brief, specialized to the currently active dataset."""
+    return textwrap.dedent(f"""\
+        You are an autonomous ML researcher tuning a small MLP classifier on
+        {ACTIVE.desc}. Each trial trains the MLP from scratch and reports
+        validation accuracy (higher better). Propose ONE new hyperparameter
+        config that you believe will raise val acc.
 
-    Allowed keys and ranges (stay inside or the trial is discarded as invalid):
-      hidden        int   [4, 256]
-      lr            float [1e-4, 1.0]
-      dropout       float [0.0, 0.9]
-      weight_decay  float [0.0, 0.1]
-      epochs        int   [1, 40]
-      batch_size    int   [8, 256]
-      activation    one of "relu", "tanh"
+        Allowed keys and ranges (stay inside or the trial is discarded as invalid):
+          hidden        int   [4, 256]
+          lr            float [1e-4, 1.0]
+          dropout       float [0.0, 0.9]
+          weight_decay  float [0.0, 0.1]
+          epochs        int   [1, 40]
+          batch_size    int   [8, 256]
+          activation    one of "relu", "tanh"
 
-    Make a meaningful, non-trivial change relative to the current best config.
-    Respond with JSON: {"intent": "<one short sentence>", "config": {all 7 keys}}.
-""")
+        Make a meaningful, non-trivial change relative to the current best config.
+        Respond with JSON: {{"intent": "<one short sentence>", "config": {{all 7 keys}}}}.
+    """)
 
 
 class LLMConfigProposer:
@@ -303,7 +422,7 @@ class LLMConfigProposer:
             resp = self.client.chat.completions.create(
                 model=self.model, temperature=self.temperature,
                 response_format={"type": "json_object"},
-                messages=[{"role": "system", "content": _LLM_BRIEF},
+                messages=[{"role": "system", "content": _llm_brief()},
                           {"role": "user", "content": user}])
             obj = json.loads(resp.choices[0].message.content)
             raw = obj.get("config", {})
@@ -404,12 +523,21 @@ def _build_policy(arm: str, world: HPOWorld, eval_cost: float):
 
 
 def run_arm(arm: str, budget_units: float, outer_seed: int,
-            fidelity: Fidelity = FULL):
+            fidelity: Fidelity = FULL, *, use_llm: bool = False,
+            model: str = "gpt-4.1-mini"):
     # Same proposer-rng seed across arms -> each arm faces the same proposer
     # behaviour (proposals diverge only because incumbents diverge -- realistic,
     # since a real agent always builds on its current best).
+    #
+    # use_llm=True swaps in the REAL OpenAI agent (gpt-4.1-mini) as the proposer:
+    # the pipeline is then genuinely agentic (an LLM tunes the hyperparameters),
+    # and the SAME gates decide keep/discard. The agent is non-deterministic, so
+    # greedy and causal follow their own live trajectories (the incumbent each
+    # builds on differs) -- a faithful closed-loop comparison rather than a fixed
+    # candidate stream.
     prng = np.random.default_rng(outer_seed * 1000 + 7)
-    world = HPOWorld(HyperProposer(), prng, fidelity=fidelity)
+    proposer = LLMConfigProposer(model=model) if use_llm else HyperProposer()
+    world = HPOWorld(proposer, prng, fidelity=fidelity)
     eval_cost = fidelity.cost
     policy = _build_policy(arm, world, eval_cost)
     budget = Budget(budget_units)
@@ -471,20 +599,15 @@ def replication_audit(accepted_records: list[dict], n_seeds: int = 30,
 # Main: run the real pipeline, report real numbers
 # ---------------------------------------------------------------------------
 
-# Noise regimes: less training data per eval => a noisier measurement. This is a
-# REAL operating point of the evaluator, not a knob on a mocked distribution.
-#
-# IMPORTANT (fair experiment): cost is held at 1.0 across all three regimes so
-# every arm gets the SAME number of proposals (~budget) at every noise level --
-# the sweep then isolates NOISE alone. (Tying a cheaper cost to noisier evals
-# would also hand the noisy regimes ~10x more proposals, confounding the trend.)
-# The cost lever (cheaper == fewer budget units per eval) is a SEPARATE axis,
+# Noise regimes are per-dataset (see DATASETS above) and exposed as the module
+# global REGIMES by set_dataset(). Recap of the design: less training data per
+# eval => a noisier measurement -- a REAL operating point of the evaluator, not a
+# knob on a mocked distribution. cost is held at 1.0 across all regimes so every
+# arm gets the SAME number of proposals (~budget) at every noise level -- the
+# sweep then isolates NOISE alone. (Tying a cheaper cost to noisier evals would
+# also hand the noisy regimes ~10x more proposals, confounding the trend.) The
+# cost lever (cheaper == fewer budget units per eval) is a SEPARATE axis,
 # demonstrated independently; here it is deliberately neutral.
-REGIMES = [
-    ("low  (full data)", Fidelity("full", 1.0, {"train_subset": None})),
-    ("med  (200 samples)", Fidelity("med", 1.0, {"train_subset": 200})),
-    ("high (80 samples)", Fidelity("high", 1.0, {"train_subset": 80})),
-]
 
 
 def run_llm_demo(budget: float = 12.0, regime_idx: int = 1, arm: str = "greedy",
@@ -494,8 +617,8 @@ def run_llm_demo(budget: float = 12.0, regime_idx: int = 1, arm: str = "greedy",
     Prints every proposal and the gate's verdict, then the held-out test number."""
     label, fid = REGIMES[regime_idx]
     print("=" * 78)
-    print(f"LLM-AGENT DEMO  (proposer=gpt-4.1-mini, arm={arm}, regime={label}, "
-          f"budget={budget})")
+    print(f"LLM-AGENT DEMO  (dataset={ACTIVE.name}, proposer=gpt-4.1-mini, "
+          f"arm={arm}, regime={label}, budget={budget})")
     print("The agent proposes configs; the SAME gates.py decides keep/discard.")
     print("=" * 78)
     n_train = fid.params.get("train_subset")
@@ -547,15 +670,17 @@ def _ms(xs: list) -> tuple[float, float]:
     return float(a.mean()), float(a.std(ddof=1)) if len(a) > 1 else 0.0
 
 
-def main(seeds=(0, 1, 2, 3, 4)):
+def main(seeds=(0, 1, 2, 3, 4), use_llm: bool = False, budget: float = 40.0,
+         model: str = "gpt-4.1-mini"):
     t0 = time.time()
-    BUDGET = 40.0
+    BUDGET = budget
     AUDIT_SEEDS = 30
 
     print("=" * 78)
-    print("REAL TASK: MLP hyperparameter search on sklearn `digits` (no download)")
-    print(f"Same gates.py as the synthetic; eval REALLY trains a model. "
-          f"{len(seeds)} outer seeds.")
+    agent = f"REAL LLM AGENT ({model})" if use_llm else "programmatic mutator"
+    print(f"REAL TASK [{ACTIVE.name}]: MLP hyperparameter search on {ACTIVE.desc}")
+    print(f"Proposer = {agent}; same gates.py as the synthetic; eval REALLY trains "
+          f"a model. {len(seeds)} outer seeds, budget {BUDGET}.")
     print("=" * 78)
     print(f"\nBaseline config: {BASELINE_CONFIG}")
     print(f"\n{'noise regime':20s} {'eval sd':>8s} | "
@@ -577,7 +702,7 @@ def main(seeds=(0, 1, 2, 3, 4)):
         for arm in ("greedy", "causal"):
             accs, falses, kepts, survs, tests = [], [], [], [], []
             for sd in seeds:
-                r = run_arm(arm, BUDGET, sd, fid)
+                r = run_arm(arm, BUDGET, sd, fid, use_llm=use_llm, model=model)
                 tests.append(true_score(r["final_config"], AUDIT_SEEDS, "te"))
                 aud = replication_audit(r["accepted_records"], AUDIT_SEEDS, n_train=n_train)
                 accs.append(r["n_accepted"]); falses.append(aud["n_vanished"])
@@ -614,18 +739,46 @@ def main(seeds=(0, 1, 2, 3, 4)):
     print("lucky wins that VANISH on re-test; the causal gate holds the line.")
     print("=" * 78)
 
-    out = {"task": "digits_mlp_hpo", "budget_units": BUDGET, "n_seeds": len(seeds),
+    out = {"task": f"{ACTIVE.name}_mlp_hpo", "dataset": ACTIVE.name,
+           "dataset_desc": ACTIVE.desc, "n_features": N_FEATURES,
+           "n_classes": N_CLASSES, "proposer": (model if use_llm else "programmatic"),
+           "budget_units": BUDGET, "n_seeds": len(seeds),
            "seeds": list(seeds), "audit_seeds": AUDIT_SEEDS,
            "baseline_config": BASELINE_CONFIG, "sweep": sweep,
            "wall_s": time.time() - t0}
-    outdir = RESULTS_DIR / "hpo_task"
+    # digits keeps the legacy results/hpo_task/ path (backward compat); other
+    # datasets write to results/hpo_<name>/. LLM runs get an _llm suffix so they
+    # don't clobber the reproducible programmatic baseline.
+    base_sub = "hpo_task" if ACTIVE.name == "digits" else f"hpo_{ACTIVE.name}"
+    sub = base_sub + ("_llm" if use_llm else "")
+    outdir = RESULTS_DIR / sub
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "summary.json").write_text(json.dumps(out, indent=2))
     print(f"\nSaved -> {outdir / 'summary.json'}   (wall {out['wall_s']:.1f}s)")
 
 
+_USAGE = (
+    "usage:\n"
+    "  python hpo_task.py [digits|fmnist|magic]            # programmatic regime sweep\n"
+    "  python hpo_task.py <dataset> llm [SEEDS] [BUDGET]   # AGENTIC sweep (LLM proposer)\n"
+    "  python hpo_task.py llm [dataset]                    # single live LLM-agent demo")
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "llm":
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("-h", "--help"):
+        print(_USAGE)
+    elif argv and argv[0] == "llm":
+        set_dataset(argv[1] if len(argv) > 1 else "digits")
         run_llm_demo()
+    elif argv and argv[0] in DATASETS:
+        set_dataset(argv[0])
+        if "llm" in argv[1:]:
+            # scoped agentic sweep; optional positional SEEDS BUDGET after 'llm'
+            rest = [a for a in argv[1:] if a != "llm"]
+            n_seeds = int(rest[0]) if len(rest) > 0 else 3
+            bud = float(rest[1]) if len(rest) > 1 else 20.0
+            main(seeds=tuple(range(n_seeds)), use_llm=True, budget=bud)
+        else:
+            main()
     else:
-        main()
+        main()  # digits (default-active)

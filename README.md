@@ -217,6 +217,111 @@ See `skeptic_gate/README.md` for details. Figures land in `results/synthetic_fig
 
 ---
 
+## Real local tasks: agentic hyperparameter search (FashionMNIST, MAGIC, digits)
+
+This is the cheap, **stationary**, fully-local counterpart to the MLRC run. The
+same skeptic gates drive an agent that tunes a **fixed MLP** on a real dataset —
+no GPU, no multi-GB download, evals are ~0.1 s so the multi-seed replication audit
+is affordable and the numbers are trustworthy (unlike the laptop MLRC eval, which
+drifts). The agent does **not** write model code; it proposes **hyperparameter
+configs** (`hidden, lr, dropout, weight_decay, epochs, batch_size, activation`),
+which keeps "broken proposals" statically detectable (an out-of-bounds config),
+so the coherence gate is complete by construction.
+
+All commands run from `skeptic_gate/` using the project venv.
+
+### Datasets shipped
+
+| name      | what it is                                   | data source (auto, first run)            |
+|-----------|----------------------------------------------|------------------------------------------|
+| `digits`  | sklearn 8×8 handwritten digits, 10 classes   | bundled with scikit-learn (no download)  |
+| `fmnist`  | FashionMNIST 28×28 → 784 pixels, 10 classes  | torchvision download, cached in `_data_fmnist/` (gitignored) |
+| `magic`   | MAGIC Gamma Telescope, 10 features, binary   | OpenML fetch (cached by scikit-learn)    |
+
+### Two proposers
+
+- **Programmatic** (default): a bounded, reproducible hyperparameter mutator.
+  Use it for the **quantitative proof** — it runs hundreds of cheap evals so the
+  false-accept counts and regime curve are statistically meaningful.
+- **LLM agent** (`gpt-4.1-mini`, needs `OPENAI_API_KEY` in `skeptic_gate/.env`):
+  the genuinely **agentic** version — a real LLM tunes the MLP, the same gates
+  decide keep/discard. Slower (one API call per proposal), so run fewer seeds.
+
+### Commands
+
+```bash
+cd skeptic_gate
+
+# --- programmatic regime sweep (greedy vs causal x 3 noise regimes x 5 seeds) ---
+../.venv/bin/python hpo_task.py fmnist        # FashionMNIST
+../.venv/bin/python hpo_task.py magic         # MAGIC
+../.venv/bin/python hpo_task.py digits        # digits (also the no-arg default)
+
+# --- AGENTIC sweep: the real LLM agent is the proposer ---
+#   hpo_task.py <dataset> llm [SEEDS] [BUDGET]   (defaults: 3 seeds, budget 20)
+../.venv/bin/python hpo_task.py fmnist llm 3 20
+../.venv/bin/python hpo_task.py magic  llm 1 20   # 1 seed = quick/cheap look
+
+# --- single live LLM-agent demo (prints every proposal + the gate's verdict) ---
+../.venv/bin/python hpo_task.py llm fmnist
+
+# --- figure from a finished run ---
+../.venv/bin/python plots_hpo.py fmnist       # -> results/figs/fig_hpo_fmnist.png
+```
+
+Outputs land in `results/hpo_<dataset>/summary.json` (programmatic) or
+`results/hpo_<dataset>_llm/summary.json` (agentic); `digits` uses the legacy
+`results/hpo_task/` path. `results/` is gitignored.
+
+### Reading the output table
+
+```
+noise regime        eval sd | greedy acc / false / test | causal acc / false / test
+high (150 samples)   0.0606 |  6.8 /  2.0 /0.778±0.043  |  1.6 / 0.6 /0.807±0.011
+```
+
+- **acc** = number of edits the arm accepted. **false** = of those, how many had
+  no real gain on an honest 30-seed re-test (the self-deception, counted).
+  **test** = held-out test accuracy of the shipped config (the agent and the gate
+  never see this split).
+- The thesis: as eval noise rises, **greedy accepts more lucky wins that vanish**
+  on re-test, and ships a worse model; the **causal** gate keeps false-accepts
+  near zero and ships a stabler model — at the cost of spending more evals per
+  decision.
+
+### Adding a NEW dataset or downstream task
+
+The pipeline is dataset-pluggable. To add one, register a `DatasetSpec` in the
+`DATASETS` dict in `hpo_task.py`:
+
+```python
+DATASETS["mytask"] = DatasetSpec(
+    name="mytask",
+    loader=_load_mytask,     # () -> dict with CPU tensors:
+                             #   X_tr,y_tr (train), X_va,y_va (gate's eval set),
+                             #   X_te,y_te (HELD-OUT test, never seen by agent/gate)
+    n_features=...,          # input width of the flat feature vector
+    n_classes=...,           # number of classes
+    desc="one line for the LLM brief (what the task is)",
+    regimes=[                # noise dial: smaller train_subset => noisier eval
+        ("low  (full data)", Fidelity("full", 1.0, {"train_subset": None})),
+        ("med  (... )",      Fidelity("med",  1.0, {"train_subset": 200})),
+        ("high (... )",      Fidelity("high", 1.0, {"train_subset": 80})),
+    ],
+)
+```
+
+Contract for the loader: return the six tensors above (features `float32`,
+labels `int64`), scale/flatten features yourself (fit any scaler on **train
+only**), and pick `train_subset` sizes so the three regimes show a clear
+low→med→high spread in `eval sd` (run the sweep once and check the table). The
+agent then tunes the same MLP on your task with no other code changes. For a
+genuinely different model family, edit `_build_mlp` / the config space — but note
+that widening the edit surface to free-form code reintroduces runtime-crash
+proposals a static coherence gate can't catch.
+
+---
+
 ## Results: end-to-end vanilla autoresearcher
 
 A budget-8 greedy run with `gpt-4.1-mini` (`results/vanilla_autoresearch_run/`):
