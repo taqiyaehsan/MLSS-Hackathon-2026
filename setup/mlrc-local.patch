@@ -8,7 +8,8 @@ index dcf3858bb..f21b587a2 100644
  # Constants
 -DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 +DEVICE = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
- NUM_MODELS = 10  # Number of models for evaluation 
+-NUM_MODELS = 10  # Number of models for evaluation 
++NUM_MODELS = int(os.environ.get("MU_NUM_MODELS", "10"))  # cost lever: fewer models = cheaper, noisier eval
  COMPETITION_NAME = "neurips-2023-machine-unlearning"
  
 -# Check and initialize Kaggle API

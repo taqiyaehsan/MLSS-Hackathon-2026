@@ -89,26 +89,23 @@ After it finishes you should have, under `.../machine_unlearning/env/`:
 
 ---
 
-## 3. Enable the cost lever (one-line edit — REQUIRED for `--fidelity cheap`)
+## 3. Confirm the cost lever is enabled
 
 The `cheap` fidelity runs the eval over fewer inner models (3 instead of 10) so
 the same budget funds ~3× more evals. The pipeline passes this via the
-`MU_NUM_MODELS` env var — **but `evaluation.py` only honors it if line 34 reads
-the env var.** That edit is in the original dev machine but is *not* in
-`mlrc-local.patch`, so on a fresh clone the lever is silently ignored (you'd still
-run 10 models and your "equal-budget" accounting would be wrong).
-
-Apply this idempotent fix once:
+`MU_NUM_MODELS` env var, which `evaluation.py` only honors if its `NUM_MODELS`
+line reads that var. `mlrc-local.patch` (applied by `gcp_setup.sh`) now makes that
+edit for you, so this is just a verification:
 
 ```bash
-EVAL=MLRC-Bench/MLAgentBench/benchmarks_base/machine_unlearning/env/evaluation.py
-grep -q 'MU_NUM_MODELS' "$EVAL" || \
-  sed -i 's/^NUM_MODELS = 10.*$/NUM_MODELS = int(os.environ.get("MU_NUM_MODELS", "10"))  # cost lever/' "$EVAL"
-grep -n 'NUM_MODELS' "$EVAL"     # verify it now reads the env var
+grep -n 'NUM_MODELS = ' MLRC-Bench/MLAgentBench/benchmarks_base/machine_unlearning/env/evaluation.py
+# expect: NUM_MODELS = int(os.environ.get("MU_NUM_MODELS", "10"))  # cost lever: ...
 ```
 
-If you only ever run `--fidelity full` (10 models, the default), you can skip this
-— but applying it is harmless and keeps the cost-lever results honest.
+If instead you see `NUM_MODELS = 10` (hardcoded), the patch didn't apply — re-run
+`bash setup/gcp_setup.sh` or apply it manually
+(`git -C MLRC-Bench apply setup/mlrc-local.patch`). Without this, `--fidelity cheap`
+silently still runs 10 models and your equal-budget accounting would be wrong.
 
 ---
 

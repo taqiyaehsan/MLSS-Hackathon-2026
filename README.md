@@ -115,7 +115,7 @@ skeptic-gate/
 ├── requirements.txt
 ├── setup/
 │   ├── setup.sh                  ← one-shot environment setup
-│   └── mlrc-local.patch          ← enabling patch for MLRC (MPS device + lazy Kaggle auth)
+│   └── mlrc-local.patch          ← enabling patch for MLRC (MPS device + lazy Kaggle auth + MU_NUM_MODELS cost lever)
 ├── skeptic_gate/                 ← all the code
 │   ├── gates.py                  ← accept policies: Greedy, Causal, Coherence (task-agnostic)
 │   │  # ── code-editing pipeline (the main pipeline) ──
@@ -173,7 +173,7 @@ This will:
 1. Clone `MLRC-Bench` into the repo root.
 2. Create a virtual environment in `.venv/` and install `requirements.txt`.
 3. Install MLRC-Bench's `MLAgentBench` package in editable mode.
-4. Apply `setup/mlrc-local.patch` (enables Apple-MPS device selection and lazy Kaggle auth so the **dev phase needs no Kaggle credentials**).
+4. Apply `setup/mlrc-local.patch` (enables Apple-MPS device selection, lazy Kaggle auth so the **dev phase needs no Kaggle credentials**, and the `MU_NUM_MODELS` cost lever).
 5. Download the Machine Unlearning data + checkpoints (CIFAR-10, pretrained + retrained ResNet-18 weights, forget index).
 
 Then add an API key:
