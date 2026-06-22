@@ -50,8 +50,8 @@ evaluation are held identical, so the comparison is a clean paired ablation.
 ### The full pipeline
 
 ```
-PART A — the code-editing agent loop (one LLM agent per task)
-         the skeptic = the COHERENCE gate (step 2) + the ACCEPT gate (step 4)
+PART A — the PROPOSED agent loop (one LLM agent per task)
+         what we propose = the skeptic = COHERENCE gate (step 2) + CAUSAL accept gate (step 4)
 
 repeat until the proposal budget runs out:
 
@@ -64,44 +64,46 @@ repeat until the proposal budget runs out:
   3. Evaluate        really train the method  →  noisy validation score
          │
          ▼
-  4. Accept gate     ┌ greedy:  score > incumbent ?                   [SKEPTIC, part 2]
-     (swappable)     └ causal:  re-test over k seeds; gain clears the noise band ?
+  4. CAUSAL gate     re-test over k seeds; accept ONLY if the gain        [SKEPTIC, part 2]
+                     clears the noise band  (don't trust one noisy score)
          │
-         ├── yes ──►  ACCEPT  (candidate becomes the new incumbent, steers next proposal)
-         └── no  ──►  DISCARD (keep the incumbent)
+         ├── clears band ───►  ACCEPT  (new incumbent, steers the next proposal)
+         └── within noise ──►  DISCARD (keep the incumbent)
          │
          ▼  record EVERY coherent method it wrote = the candidate stream
             (loop back to step 1 with the remaining budget)
 
-PART B — skeptic ablation + selection over the FIXED candidate stream (NO new agent calls)
+PART B — evaluating the skeptic vs the GREEDY BASELINE (NO new agent calls)
+         baseline = the "vanilla autoresearcher": accept any score > incumbent, no re-test
 
   5. Score matrix    re-score each method over S seeds (val) + one-touch TEST + FLOPs
          │
-         ├─►  6a. Replay ablation   replay the greedy AND causal accept gates over the
+         ├─►  6a. Replay ablation   run the loop once to fix the candidate stream, then
+         │            replay BOTH the causal gate (ours) and the greedy baseline over the
          │            IDENTICAL candidates + measurements (pure policy isolation), then a
          │            replication audit: which accepted gains vanish vs the full-seed truth
          │
          ├─►  6b. Pareto frontier   accuracy ↑ / stability ↓ / FLOPs ↓  (report, no auto-pick)
          │
-         └─►  6c. Regime sweep      dial up evaluation noise; measure the greedy vs causal
-                     accept gate's false-positive rate  →  when does skepticism pay?
+         └─►  6c. Regime sweep      dial up evaluation noise; measure the causal-vs-greedy
+                     false-positive rate  →  when does skepticism pay?
 ```
 
-**The skeptic = the coherence gate (step 2, culls broken edits before any eval) +
-the accept gate (step 4, greedy vs causal).** The accept gate is where the two arms
-differ: greedy believes a single noisy score; causal re-tests over k seeds and
-accepts only if the gain clears the noise band.
+**What we propose is the skeptic: the coherence gate (step 2, culls broken edits
+before any eval) + the causal accept gate (step 4, re-tests over k seeds and accepts
+only if the gain clears the noise band).** Greedy — accepting on a single noisy
+score — is the **baseline** (the vanilla autoresearcher), kept only so we can measure
+what the skeptic buys.
 
-To compare the two gates *honestly*, Part A runs **once** (with the greedy gate) to
-produce a candidate stream, then **Part B replays both the greedy and the causal
-accept gate over that identical stream and its measurements** — so the accept rule
-is the *only* thing that changes (a clean paired ablation, no extra LLM calls).
-Running two live loops instead would diverge — different accepts → different
-proposals → confounded — which is exactly why the comparison is done by replay. The
-held-out test split and the many-seed replication audit live **outside** the loop;
-the agent and the gates never see them, so reported progress can't be
-selection-on-the-eval-set. The regime sweep (6c) is the headline result —
-see [`docs/SKEPTIC_REGIME_RESULTS.md`](docs/SKEPTIC_REGIME_RESULTS.md).
+To compare them *honestly*, the loop is run **once** to fix a candidate stream, and
+**Part B replays both the causal gate (ours) and the greedy baseline over that
+identical stream and its measurements** — so the accept rule is the *only* thing that
+changes (a clean paired ablation, no extra LLM calls). Running two live loops instead
+would diverge (different accepts → different proposals → confounded), which is why the
+comparison is done by replay. The held-out test split and the many-seed replication
+audit live **outside** the loop; the agent and the gates never see them, so reported
+progress can't be selection-on-the-eval-set. The regime sweep (6c) is the headline
+result — see [`docs/SKEPTIC_REGIME_RESULTS.md`](docs/SKEPTIC_REGIME_RESULTS.md).
 
 ---
 
