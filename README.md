@@ -50,36 +50,46 @@ evaluation are held identical, so the comparison is a clean paired ablation.
 ### The full pipeline
 
 ```
-repeat until the eval budget runs out:
+PART A — the code-editing agent loop (one LLM agent per task, greedy-guided)
 
-  1. Proposer        LLM agent (or programmatic mutator) proposes a hyperparameter edit
+repeat until the proposal budget runs out:
+
+  1. Proposer        LLM agent rewrites the COMPLETE method file (baseline → CNN/MLP/...)
          │
          ▼
-  2. Coherence gate  config parses / in bounds?   ── no ──►  CULL  (discard, no eval spent)
+  2. Coherence gate  parses? keeps fit/predict signature?  ── no ──►  CULL (no eval spent)
          │ yes
          ▼
-  3. Evaluate        really train the model  →  noisy validation score
+  3. Evaluate        really train the method  →  noisy validation score
          │
          ▼
-  4. Accept policy   greedy:  score > incumbent ?
-                     causal:  re-test over k seeds, gain clears the noise band ?
+  4. Greedy guide    score > best ? → adopt as incumbent (steers the next proposal)
          │
-         ├── yes ──►  ACCEPT  (candidate becomes the new incumbent)
-         └── no  ──►  DISCARD (revert to the incumbent)
+         ▼  record EVERY coherent method it wrote = the candidate stream
+            (loop back to step 1 with the remaining budget)
+
+PART B — analysis over the FIXED candidate stream (NO new agent calls)
+
+  5. Score matrix    re-score each method over S seeds (val) + one-touch TEST + FLOPs
          │
-         ▼  (loop back to step 1 with the remaining budget)
-
-when the budget is exhausted:
-
-  5. Ship the final config  →  held-out TEST  +  replication audit
-     (these live OUTSIDE the loop; the agent and the gate never see them)
+         ├─►  6a. Replay ablation   replay greedy AND causal over the IDENTICAL
+         │            candidates + measurements (pure policy isolation), then a
+         │            replication audit: which accepted gains vanish vs the full-seed truth
+         │
+         ├─►  6b. Pareto frontier   accuracy ↑ / stability ↓ / FLOPs ↓  (report, no auto-pick)
+         │
+         └─►  6c. Regime sweep      dial up evaluation noise; measure greedy vs causal
+                     false-positive rate  →  when does skepticism pay?
 ```
 
-The proposer, evaluation, and budget are identical across arms; swapping the
-accept policy (greedy / causal / coherence-wrapped) is the only change. The
-held-out test split and the many-seed replication audit are **outside** the loop —
-the agent and the gate never see them, so reported progress can't be
-selection-on-the-eval-set.
+**Part A** is the autonomous researcher: the proposer, evaluation, and budget are
+identical across arms, and the agent runs **once** to produce a candidate stream.
+**Part B** is the analysis, run over that fixed stream so that swapping the accept
+policy (greedy / causal) is the *only* change — a clean paired ablation with no
+extra LLM calls. The held-out test split and the many-seed replication audit live
+**outside** the loop; the agent and the gate never see them, so reported progress
+can't be selection-on-the-eval-set. The regime sweep (6c) is the headline result —
+see [`docs/SKEPTIC_REGIME_RESULTS.md`](docs/SKEPTIC_REGIME_RESULTS.md).
 
 ---
 
@@ -94,20 +104,31 @@ skeptic-gate/
 │   └── mlrc-local.patch          ← enabling patch for MLRC (MPS device + lazy Kaggle auth)
 ├── skeptic_gate/                 ← all the code
 │   ├── gates.py                  ← accept policies: Greedy, Causal, Coherence (task-agnostic)
+│   │  # ── code-editing pipeline (the main pipeline) ──
+│   ├── base_method.py            ← the fit(X,y,seed)/predict(X) interface the agent implements
+│   ├── task_data.py              ← harness-owned loaders + fixed train/val/test split (test held out)
+│   ├── run_method.py             ← trusted harness: train one method file, score it (noise dial)
+│   ├── local_task.py             ← TaskSpec, coherence gate (AST), OpenAI proposer, the world
+│   ├── tasks/<name>/             ← background.md + baseline_method.py (fashionmnist, magic, ...)
+│   ├── study.py                  ← THE replay study: pool → score matrix → replay + audit + Pareto
+│   ├── regime_sweep.py           ← noise-dial regime sweep: greedy vs causal false positives vs noise
+│   │  # ── earlier paths (config-tuning + MLRC) ──
+│   ├── hpo_task.py               ← real local tasks: agentic MLP hyperparameter search (digits/fmnist/magic)
+│   ├── plots_hpo.py              ← figures for the local tasks
 │   ├── mlrc_adapter.py           ← real MLRC world: LLM proposer + real eval + keep/discard
 │   ├── run_mlrc.py               ← CLI: run any arm on the real task
 │   ├── baseline_noise.py         ← characterize per-eval noise
 │   ├── replication_audit_real.py ← re-run accepted changes N× to test if a "win" survives
 │   ├── baseline_MyMethod.py      ← canonical baseline method (reset source of truth)
-│   ├── hpo_task.py               ← real local tasks: agentic MLP hyperparameter search (digits/fmnist/magic)
-│   ├── plots_hpo.py              ← figures for the local tasks
 │   ├── synthetic.py / experiment.py / plots.py / sanity.py / tests.py
 │   └── README.md                 ← notes on the controlled synthetic study
 ├── results/
+│   ├── skeptic_regime/           ← THE skeptic result: regime curve + code-edit study + figure
 │   ├── vanilla_autoresearch_run/ ← end-to-end greedy run (summary, per-step log, every proposal)
 │   ├── baseline_observation/     ← repeated baseline evals from different time windows
 │   └── synthetic_figs/           ← figures from the controlled synthetic study
 └── docs/
+    ├── SKEPTIC_REGIME_RESULTS.md ← skeptic gate under noisy eval: results + explanation
     └── OBSERVATIONS.md           ← the non-stationary-evaluation finding
 ```
 

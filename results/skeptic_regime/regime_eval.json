@@ -1,0 +1,128 @@
+{
+  "task": "fashionmnist",
+  "mode": "eval",
+  "n_seeds": 8,
+  "r_trials": 200,
+  "truth": [
+    0.737500011920929,
+    0.8766666650772095,
+    0.9045833349227905,
+    0.5558333396911621,
+    0.9141666889190674,
+    0.9012500047683716
+  ],
+  "points": [
+    {
+      "level": 2000,
+      "noise_std": 0.009069383322287716,
+      "greedy": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.9140229386091232
+      },
+      "causal": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.913879188299179
+      }
+    },
+    {
+      "level": 1000,
+      "noise_std": 0.011123845466557083,
+      "greedy": {
+        "mean_vanished": 0.04,
+        "fp_rate": 0.04,
+        "max_vanished": 1,
+        "mean_final_acc": 0.9128833532333374
+      },
+      "causal": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.9126333522796631
+      }
+    },
+    {
+      "level": 500,
+      "noise_std": 0.01887356907550495,
+      "greedy": {
+        "mean_vanished": 0.08,
+        "fp_rate": 0.08,
+        "max_vanished": 1,
+        "mean_final_acc": 0.911552100777626
+      },
+      "causal": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.9111000156402588
+      }
+    },
+    {
+      "level": 200,
+      "noise_std": 0.03137430159614153,
+      "greedy": {
+        "mean_vanished": 0.15,
+        "fp_rate": 0.15,
+        "max_vanished": 1,
+        "mean_final_acc": 0.9092187637090683
+      },
+      "causal": {
+        "mean_vanished": 0.02,
+        "fp_rate": 0.02,
+        "max_vanished": 1,
+        "mean_final_acc": 0.909150013923645
+      }
+    },
+    {
+      "level": 100,
+      "noise_std": 0.036203804952426574,
+      "greedy": {
+        "mean_vanished": 0.115,
+        "fp_rate": 0.115,
+        "max_vanished": 1,
+        "mean_final_acc": 0.9082520961761474
+      },
+      "causal": {
+        "mean_vanished": 0.025,
+        "fp_rate": 0.025,
+        "max_vanished": 1,
+        "mean_final_acc": 0.9046625101566315
+      }
+    },
+    {
+      "level": 50,
+      "noise_std": 0.045266248612801395,
+      "greedy": {
+        "mean_vanished": 0.09,
+        "fp_rate": 0.09,
+        "max_vanished": 1,
+        "mean_final_acc": 0.9036645925045014
+      },
+      "causal": {
+        "mean_vanished": 0.02,
+        "fp_rate": 0.02,
+        "max_vanished": 1,
+        "mean_final_acc": 0.9014083409309387
+      }
+    },
+    {
+      "level": 25,
+      "noise_std": 0.06922711079379001,
+      "greedy": {
+        "mean_vanished": 0.04,
+        "fp_rate": 0.04,
+        "max_vanished": 1,
+        "mean_final_acc": 0.8991916739940643
+      },
+      "causal": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.8950750052928924
+      }
+    }
+  ]
+}
