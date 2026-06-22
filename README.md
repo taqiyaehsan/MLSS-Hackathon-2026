@@ -13,6 +13,22 @@ This repo contains:
 
 ---
 
+## Contents
+
+- [The idea in one picture](#the-idea-in-one-picture)
+- [Repository layout](#repository-layout)
+- [Setup](#setup)
+- [Running on Google Cloud (GPU)](#running-on-google-cloud-gpu)
+- [Running the autoresearcher](#running-the-autoresearcher)
+- [Real local tasks: agentic hyperparameter search (FashionMNIST, MAGIC, digits)](#real-local-tasks-agentic-hyperparameter-search-fashionmnist-magic-digits)
+- [Results: end-to-end vanilla autoresearcher](#results-end-to-end-vanilla-autoresearcher)
+- [Suggested skeptic wrapper (causal + coherence)](#suggested-skeptic-wrapper-causal--coherence)
+- [Observation worth knowing before trusting any score](#observation-worth-knowing-before-trusting-any-score)
+- [Task reference: Machine Unlearning (dev phase)](#task-reference-machine-unlearning-dev-phase)
+- [Credits / upstream](#credits--upstream)
+
+---
+
 ## The idea in one picture
 
 ```
