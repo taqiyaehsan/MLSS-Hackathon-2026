@@ -46,6 +46,34 @@ suggested skeptic wrapper:
 Only the accept rule changes between the two; the proposer, the budget, and the
 evaluation are held identical, so the comparison is a clean paired ablation.
 
+### The full pipeline
+
+```mermaid
+flowchart TD
+    A["Proposer<br/>(LLM agent or programmatic mutator)<br/>suggests an edit"] --> B{"Coherence gate<br/>parses / in bounds?"}
+    B -- no --> X["Cull — no eval spent"]
+    B -- yes --> C["Evaluate<br/>really train the model →<br/>noisy validation score"]
+    C --> D{"Accept policy"}
+    D -- "greedy" --> E{"score &gt; incumbent?"}
+    D -- "causal" --> F["Re-test over several seeds"]
+    F --> G{"gain clears<br/>the noise band?"}
+    E -- yes --> H["Accept → new incumbent"]
+    G -- yes --> H
+    E -- no --> I["Discard → revert"]
+    G -- no --> I
+    H --> J{"budget left?"}
+    I --> J
+    X --> J
+    J -- yes --> A
+    J -- no --> K["Ship final config<br/>→ held-out TEST + replication audit"]
+```
+
+The proposer, evaluation, and budget are identical across arms; swapping the
+accept policy (greedy / causal / coherence-wrapped) is the only change. The
+held-out test split and the many-seed replication audit are **outside** the loop —
+the agent and the gate never see them, so reported progress can't be
+selection-on-the-eval-set.
+
 ---
 
 ## Repository layout
@@ -64,6 +92,8 @@ skeptic-gate/
 │   ├── baseline_noise.py         ← characterize per-eval noise
 │   ├── replication_audit_real.py ← re-run accepted changes N× to test if a "win" survives
 │   ├── baseline_MyMethod.py      ← canonical baseline method (reset source of truth)
+│   ├── hpo_task.py               ← real local tasks: agentic MLP hyperparameter search (digits/fmnist/magic)
+│   ├── plots_hpo.py              ← figures for the local tasks
 │   ├── synthetic.py / experiment.py / plots.py / sanity.py / tests.py
 │   └── README.md                 ← notes on the controlled synthetic study
 ├── results/
