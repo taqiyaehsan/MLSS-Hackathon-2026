@@ -262,48 +262,47 @@ def fig_regime_acc(data: dict, out: Path):
 
 
 def fig_spurious(cdata: dict, out: Path):
-    """Colored MNIST's distinct story: a SPURIOUS-CORRELATION trap the seed-gate
-    cannot catch. Left panel = val-vs-test per method (the gate accepts a high-val
-    CNN that collapses on the flipped test); right panel = the seed-noise regime
-    curve (where the skeptic DOES still help). Drawn only if the data is present."""
+    """Colored MNIST's distinct story: a SPURIOUS color<->group correlation that
+    REVERSES at test. Left panel = val-vs-test per method -- the linear baseline
+    leans on color and COLLAPSES on the flipped test, while the agent's CNNs learn
+    shape and stay robust (near the diagonal). Right panel = the seed-noise regime
+    curve (the skeptic still cuts false positives). Drawn only if data is present."""
     rows = [r for r in cdata["methods"] if r["test"] > CRASH]
     reg = cdata["regime"]
     if not rows:
         print("  ! no colored_mnist methods; skipping fig_spurious")
         return
     base = next((r for r in rows if r["intent"].strip().lower() == "baseline"), None)
-    pick = max(rows, key=lambda r: r["acc_val_mean"])          # what greedy/causal accept
-    others = [r for r in rows if r is not base and r is not pick]
+    cnns = [r for r in rows if r is not base]
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(11, 4.6))
 
-    # -- Panel A: validation vs held-out test (the collapse) --
+    # -- Panel A: validation vs held-out test (robust = near the diagonal) --
     axA.plot([0, 1], [0, 1], "--", color="#bbb", lw=1, zorder=1,
-             label="no shift (test = val)")
-    if others:
-        axA.scatter([r["acc_val_mean"] for r in others], [r["test"] for r in others],
-                    s=90, c=GREEDY_C, alpha=0.8, edgecolor="k", linewidth=0.5,
+             label="robust (test = val)")
+    if cnns:
+        axA.scatter([r["acc_val_mean"] for r in cnns], [r["test"] for r in cnns],
+                    s=110, c=BEST_C, alpha=0.9, edgecolor="k", linewidth=0.5,
                     label="agent's CNNs", zorder=3)
-    axA.scatter([pick["acc_val_mean"]], [pick["test"]], s=210, facecolor="none",
-                edgecolor=CAUSAL_C, linewidth=2.4, zorder=5,
-                label="gate accepts this (highest val)")
-    axA.annotate(f"val {pick['acc_val_mean']:.2f} → test {pick['test']:.2f}",
-                 (pick["acc_val_mean"], pick["test"]), textcoords="offset points",
-                 xytext=(-6, 12), fontsize=9, color=CAUSAL_C, weight="bold", ha="right")
+        top = max(cnns, key=lambda r: r["acc_val_mean"])
+        axA.annotate("agent's CNNs:\nlearn shape → robust",
+                     (top["acc_val_mean"], top["test"]), textcoords="offset points",
+                     xytext=(-10, -36), fontsize=9, color=BEST_C, weight="bold", ha="right")
     if base:
-        axA.scatter([base["acc_val_mean"]], [base["test"]], s=170, c=BEST_C, marker="D",
-                    edgecolor="k", linewidth=0.8, zorder=4, label="baseline (shape-only)")
-        axA.annotate("shape-only:\ngeneralizes", (base["acc_val_mean"], base["test"]),
-                     textcoords="offset points", xytext=(12, 4), fontsize=9,
-                     color=BEST_C, weight="bold", ha="left")
+        axA.scatter([base["acc_val_mean"]], [base["test"]], s=180, c=GREEDY_C, marker="D",
+                    edgecolor="k", linewidth=0.8, zorder=4, label="linear baseline")
+        axA.annotate(f"leans on color →\ncollapses (val {base['acc_val_mean']:.2f} "
+                     f"→ test {base['test']:.2f})", (base["acc_val_mean"], base["test"]),
+                     textcoords="offset points", xytext=(14, 6), fontsize=9,
+                     color=GREEDY_C, weight="bold", ha="left")
     axA.set_xlabel("validation accuracy  (what the gate optimizes)")
-    axA.set_ylabel("held-out TEST accuracy\n(spurious correlation flipped)")
-    axA.set_xlim(0.45, 1.0)
-    axA.set_ylim(0.0, 0.95)
-    axA.set_title("Higher validation ⇒ LOWER test\n(more reliance on the spurious cue)")
-    axA.legend(loc="lower left", fontsize=8.5)
+    axA.set_ylabel("held-out TEST accuracy\n(spurious correlation reversed)")
+    axA.set_xlim(0.0, 1.0)
+    axA.set_ylim(0.0, 1.0)
+    axA.set_title("The baseline overfits to color (collapses);\nthe agent's CNN learns shape (robust)")
+    axA.legend(loc="center left", fontsize=8.5)
 
-    # -- Panel B: seed-noise regime curve (where the skeptic still helps) --
+    # -- Panel B: seed-noise regime curve (the skeptic still helps) --
     if reg:
         pts, x = _regime_xy(reg)
         axB.plot(x, [p["greedy"]["fp_rate"] for p in pts], "-o", color=GREEDY_C, lw=2,
@@ -312,13 +311,13 @@ def fig_spurious(cdata: dict, out: Path):
                  label="causal skeptic (re-test)")
         axB.set_xlabel("evaluation noise  (std of the noisy score)")
         axB.set_ylabel("false-positive rate")
-        axB.set_ylim(0, max(0.4, axB.get_ylim()[1]))
-        axB.set_title("On the SEED-noise axis the skeptic\nstill cuts false positives")
-        axB.legend(loc="upper left", fontsize=9)
+        axB.set_ylim(0, max(0.3, axB.get_ylim()[1]))
+        axB.set_title("Under eval noise the skeptic\nstill cuts false positives")
+        axB.legend(loc="upper right", fontsize=9)
     else:
         axB.axis("off")
-    fig.suptitle("Colored MNIST — the skeptic's blind spot: seed re-testing can't catch "
-                 "a distribution-shift trap", fontsize=12.5, fontweight="bold")
+    fig.suptitle("Colored MNIST — a spurious cue the agent learns past: the baseline "
+                 "collapses on the flipped test, the CNN doesn't", fontsize=12, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     fig.savefig(out / "fig_spurious.png")
     plt.close(fig)
