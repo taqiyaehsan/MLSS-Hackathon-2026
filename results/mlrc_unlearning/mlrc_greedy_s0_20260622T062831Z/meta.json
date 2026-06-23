@@ -1,0 +1,15 @@
+{
+  "run_id": "mlrc_greedy_s0_20260622T062831Z",
+  "arm": "greedy",
+  "policy": "greedy",
+  "budget": 8.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 0,
+  "fidelity": "full",
+  "fidelity_cost": 1.0,
+  "fidelity_params": {},
+  "mock_llm": false,
+  "mock_eval": false,
+  "started": "2026-06-22T06:28:32.118686+00:00"
+}

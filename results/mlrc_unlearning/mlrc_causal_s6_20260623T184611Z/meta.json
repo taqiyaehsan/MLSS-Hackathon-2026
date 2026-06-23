@@ -1,0 +1,15 @@
+{
+  "run_id": "mlrc_causal_s6_20260623T184611Z",
+  "arm": "causal",
+  "policy": "causal",
+  "budget": 8.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 6,
+  "fidelity": "full",
+  "fidelity_cost": 1.0,
+  "fidelity_params": {},
+  "mock_llm": false,
+  "mock_eval": false,
+  "started": "2026-06-23T18:46:13.820861+00:00"
+}
