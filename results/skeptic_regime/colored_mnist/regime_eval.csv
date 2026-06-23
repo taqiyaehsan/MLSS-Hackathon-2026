@@ -1,0 +1,8 @@
+task,mode,level,noise_std,greedy_fp_rate,greedy_mean_vanished,greedy_max_vanished,greedy_mean_final_acc,causal_fp_rate,causal_mean_vanished,causal_max_vanished,causal_mean_final_acc
+colored_mnist,eval,2000,0.006240,0.0050,0.0050,1,0.877510,0.0000,0.0000,0,0.877340
+colored_mnist,eval,1000,0.006240,0.0050,0.0050,1,0.877510,0.0000,0.0000,0,0.877340
+colored_mnist,eval,500,0.009113,0.0150,0.0150,1,0.877310,0.0050,0.0050,1,0.877180
+colored_mnist,eval,200,0.014819,0.1000,0.1000,1,0.876025,0.0150,0.0150,1,0.877055
+colored_mnist,eval,100,0.033704,0.1950,0.2100,2,0.873460,0.0250,0.0250,1,0.876880
+colored_mnist,eval,50,0.049427,0.2800,0.2850,2,0.871920,0.0550,0.0550,1,0.876395
+colored_mnist,eval,25,0.076698,0.2150,0.2150,1,0.873030,0.0500,0.0500,1,0.876400

@@ -1,10 +1,18 @@
-# Skeptic gate under noisy evaluation — results (FashionMNIST + MAGIC)
+# Skeptic gate under noisy evaluation — results (FashionMNIST + MAGIC + Colored MNIST)
 
 The headline experiment for the skeptic gate: **when an autonomous code-editing
 agent is evaluated noisily, the greedy accept rule adopts "improvements" that do
 not replicate, while the causal accept rule (the skeptic) does not.** We show this
 on two team-authored tasks — FashionMNIST (vision) and MAGIC Gamma Telescope
 (tabular) — both local, CPU, stationary.
+
+A third task, **Colored MNIST**, is included for a different reason: it maps the
+*boundary* of the skeptic. The causal gate re-tests over seeds on the validation
+distribution, so it catches **seed-noise** false positives (sections 1–4). It
+**cannot** catch a **distribution-shift** false positive — a win that replicates
+perfectly across seeds yet relies on a spurious cue that flips at test time
+(section 5). Reporting both is the honest characterization: *more seeds fix noise,
+not the wrong held-out distribution.*
 
 The proposed system is the **skeptic**: a coherence gate (culls broken edits before
 any eval) + a **causal accept gate** (re-tests over k seeds, accepts only if the
@@ -103,6 +111,66 @@ known TODO.
 
 ---
 
+## 5. The skeptic's blind spot — spurious correlation (Colored MNIST)
+
+The first four sections show where the causal gate *wins*. This section shows, just
+as honestly, where it *can't help* — and why that is a property of the held-out
+distribution, not of the gate.
+
+**Task (a spurious-correlation stress test).** Two-channel 28×28 images; the binary
+label is `digit ≥ 5` with 25 % label noise (so a shape-only predictor is capped
+around ~0.75). A spurious cue — *whether the two channels show the same digit* — is
+correlated with the label at **0.90 in train and validation, but flipped to 0.10 in
+the held-out test**. The cue is a non-linear channel *interaction* (identical
+per-channel marginals), so the linear baseline can only read shape, while a CNN can
+read the cue. The harness owns the test split; the agent never sees it.
+
+**What happened (`results/skeptic_regime/colored_mnist/`, fig `fig_spurious.png`):**
+
+| idx | method | val | test | GFLOPs |
+|-----|--------|-----|------|--------|
+| **1** *(gate accepts)* | small CNN | **0.876** | **0.130** | 208 |
+| 2 | + batch-norm CNN | 0.872 | 0.149 | 777 |
+| 3 | fixed-norm CNN | 0.864 | 0.169 | 1165 |
+| 8 | fixed-norm CNN | 0.859 | 0.171 | 1165 |
+| 6 | + augmentation | 0.853 | 0.210 | 1165 |
+| 7 | + augmentation | 0.851 | 0.329 | 1165 |
+| **0** | baseline (linear, shape-only) | **0.607** | **0.581** | 0.11 |
+| 4, 5 | affine-augmentation CNN | *crash* | *crash* | — |
+
+- **The gate accepts a catastrophe — correctly.** Both greedy and causal accept the
+  first CNN (idx 1): validation **0.607 → 0.876** (a real, +0.27, seed-stable gain),
+  and the replication audit (val-based) reports it **survives**. Yet on the flipped
+  test it goes **0.581 → 0.130** — a −0.45 collapse the seed audit is blind to.
+- **Optimizing validation actively selects the trap.** val and test are *inversely*
+  related — the harder a model leans on the spurious cue to win validation, the worse
+  it generalizes (idx 7: 0.851 val / 0.329 test → idx 1: 0.876 val / 0.130 test). The
+  only model that generalizes (the shape-only baseline, 0.581 test) looks *worst* on
+  validation.
+- **The seed-noise axis still behaves as in sections 3–4.** Re-running the regime
+  sweep on this pool, the causal gate still cuts greedy's false positives ~5× — it
+  just operates on a validation signal that is itself misleading here:
+
+| eval size | noise σ | greedy FP-rate | causal FP-rate | greedy final acc | causal final acc |
+|-----------|---------|----------------|----------------|------------------|------------------|
+| 2000 | 0.006 | 0.01 | 0.00 | 0.8775 | 0.8773 |
+| 500  | 0.009 | 0.01 | 0.01 | 0.8773 | 0.8772 |
+| 200  | 0.015 | 0.10 | 0.01 | 0.8760 | 0.8771 |
+| 100  | 0.034 | 0.20 | 0.03 | 0.8735 | 0.8769 |
+| 50   | 0.049 | **0.28** | **0.06** | 0.8719 | 0.8764 |
+| 25   | 0.077 | 0.21 | 0.05 | 0.8730 | 0.8764 |
+
+**Bonus (crash handling):** the agent twice hallucinated a non-existent API
+(`torch.radians`); both proposals were caught and scored as failures, not run-killers.
+
+**One-line takeaway:** *the causal skeptic catches false wins that come from
+measurement noise, but not false wins that come from the wrong validation
+distribution — Colored MNIST shows a +0.27 validation gain the gate accepts and the
+seed audit blesses, which is a −0.45 test collapse. The fix is a shifted held-out
+set, not more seeds.*
+
+---
+
 ## Reproduce
 
 ```bash
@@ -111,10 +179,15 @@ cd skeptic_gate
 # 1. the code-editing agent with the causal skeptic (needs OPENAI_API_KEY in .env)
 python study.py fashionmnist llm 8 5
 python study.py magic llm 8 5
+python study.py colored_mnist llm 8 5      # the spurious-correlation stress test
 
 # 2. the noise-dial regime sweep (NO LLM calls — reuses each study's pool)
 python regime_sweep.py fashionmnist eval 8 200
 python regime_sweep.py magic eval 8 200
+python regime_sweep.py colored_mnist eval 8 200
+
+# 3. poster figures (auto-discovers all three tasks; colored_mnist -> fig_spurious.png)
+python make_poster_figs.py
 ```
 
 Each study writes `llm.json` + `methods_llm.csv` (score/Pareto table) +

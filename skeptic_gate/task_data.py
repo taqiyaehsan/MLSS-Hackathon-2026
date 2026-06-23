@@ -6,8 +6,11 @@ Working sets are deliberately subsampled: the point is a real, cheap, STATIONARY
 train-and-score loop, not a leaderboard model. A whole-dataset CNN would make the
 replication audit (many seeds x many evals) explode for no gain to the gate story.
 
-  fashionmnist -- raw images (N, 1, 28, 28) in [0,1], 10 classes  (CNN possible)
-  magic        -- tabular (N, 10) z-scored, 2 classes (gamma signal vs hadron bg)
+  fashionmnist  -- raw images (N, 1, 28, 28) in [0,1], 10 classes  (CNN possible)
+  magic         -- tabular (N, 10) z-scored, 2 classes (gamma signal vs hadron bg)
+  colored_mnist -- raw images (N, 2, 28, 28) in [0,1], 2 classes, with a SPURIOUS
+                   color<->label correlation that FLIPS between train/val and test
+                   (the classic IRM stress test for the causal gate; see loader).
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import numpy as np
 import torch
 
 _FMNIST_ROOT = Path(__file__).resolve().parent / "_data_fmnist"
+_MNIST_ROOT = Path(__file__).resolve().parent / "_data_mnist"
 
 # Cache loaded splits so repeated harness calls in one process don't re-read disk.
 _CACHE: dict[str, dict] = {}
@@ -87,9 +91,84 @@ def load_diabetes() -> dict:
                  sc.transform(X_te), y_te, regression=True)
 
 
+def _colorize_match(images, labels, e, rng):
+    """Two-channel images whose SPURIOUS feature is a NON-LINEAR channel interaction.
+
+    Channel 0 always holds the true digit (this carries the SHAPE signal -- the
+    invariant cue). Channel 1 either MATCHES it (digits identical) or holds a
+    DIFFERENT random digit, selected by the spurious bit:
+
+        match = label XOR Bernoulli(e)      (1 -> channels match, 0 -> they differ)
+
+    so "do the two channels match" predicts the label with probability 1-e. Crucially
+    BOTH classes put a clean digit in each channel, so the per-pixel/per-channel
+    MARGINALS are identical: the spurious cue is readable ONLY from the joint relation
+    between the channels (an interaction), which a CNN/MLP can learn but a LINEAR model
+    cannot. That capability gap is deliberate -- it leaves validation HEADROOM above
+    the (linear, shape-only) baseline so a CNN can climb by exploiting the spurious
+    cue, and the causal gate gets a real apparent win to (correctly, on val) accept.
+
+      images: (N,28,28) float in [0,1]; labels: (N,) binary {0,1}; e: cue-flip prob.
+    Returns (N,2,28,28) float32.
+    """
+    n = len(labels)
+    match = np.logical_xor(labels.astype(bool), rng.random(n) < e)   # spurious bit
+    other = images[rng.permutation(n)]                               # a different digit
+    out = np.zeros((n, 2, 28, 28), dtype=np.float32)
+    out[:, 0] = images
+    out[:, 1] = np.where(match[:, None, None], images, other)
+    return out
+
+
+def load_colored_mnist(n_total: int = 5_000, e_train: float = 0.10,
+                       e_val: float = 0.10, e_test: float = 0.90,
+                       label_noise: float = 0.25) -> dict:
+    """Colored MNIST (cf. Arjovsky et al., IRM) -- a SPURIOUS-CORRELATION stress test.
+
+    The binary label is digit>=5, then flipped with prob `label_noise` (0.25), so a
+    purely SHAPE-based predictor is capped around ~1-label_noise. A two-channel
+    SPURIOUS cue (whether the channels match; see _colorize_match) is then correlated
+    with the (noisy) label:
+
+      * train + val: the cue matches the label with prob 1-e_train/val = 0.90
+      * test:        the cue matches the label with prob 1-e_test     = 0.10  (FLIPPED)
+
+    On train/val the spurious cue (0.90) beats the shape (~0.75), so any model that
+    latches onto it scores ~0.90 in validation -- stably, across every seed -- yet
+    COLLAPSES to ~0.10 on the held-out test, whose correlation is reversed. train and
+    val share one distribution, so the causal gate's seed re-testing is working
+    CORRECTLY (the val gains are real and reproducible); the failure is distributional,
+    not seed noise -- which is exactly what makes this a clean stress test of what the
+    seed-gate can and cannot catch. The cue is a NON-LINEAR channel interaction, so the
+    linear baseline can only read shape (~0.64 val, and ~0.64 test -- robust), leaving
+    headroom a CNN fills by exploiting the spurious cue. The harness owns the test
+    split; the agent's code never sees it.
+    """
+    from torchvision import datasets
+    from sklearn.model_selection import train_test_split
+    tr = datasets.MNIST(root=str(_MNIST_ROOT), train=True, download=False)
+    X = tr.data.numpy().astype(np.float32) / 255.0            # (60000,28,28)
+    digit = tr.targets.numpy()
+    rng = np.random.default_rng(0)
+    if n_total is not None and n_total < len(digit):
+        sel = rng.choice(len(digit), size=n_total, replace=False)
+        X, digit = X[sel], digit[sel]
+    y = (digit >= 5).astype(np.int64)                         # shape label
+    y = np.logical_xor(y.astype(bool), rng.random(len(y)) < label_noise).astype(np.int64)
+    idx = np.arange(len(y))
+    idx_tmp, idx_te = train_test_split(idx, test_size=0.20, random_state=0, stratify=y)
+    idx_tr, idx_va = train_test_split(idx_tmp, test_size=0.25, random_state=0,
+                                      stratify=y[idx_tmp])
+    Xtr = _colorize_match(X[idx_tr], y[idx_tr], e_train, rng)
+    Xva = _colorize_match(X[idx_va], y[idx_va], e_val, rng)
+    Xte = _colorize_match(X[idx_te], y[idx_te], e_test, rng)
+    return _pack(Xtr, y[idx_tr], Xva, y[idx_va], Xte, y[idx_te])
+
+
 # Loader key MUST match the TaskSpec name in local_task.py (the harness loads data
 # by task name). "example_regression" is the diabetes regression template.
 LOADERS = {"fashionmnist": load_fashionmnist, "magic": load_magic,
+           "colored_mnist": load_colored_mnist,
            "example_regression": load_diabetes}
 
 

@@ -81,6 +81,14 @@ TASKS: dict[str, TaskSpec] = {
         regimes=[("low  (full data)", Fidelity("full", 1.0, {"train_frac": 1.0})),
                  ("med  (15% data)", Fidelity("med", 1.0, {"train_frac": 0.15})),
                  ("high (4% data)", Fidelity("high", 1.0, {"train_frac": 0.04}))]),
+    # SPURIOUS-CORRELATION stress test (IRM Colored MNIST). Same noise-dial regimes
+    # as fashionmnist; the interesting axis here is val-vs-test divergence, not the
+    # train-subsample noise (see tasks/colored_mnist/background.md + task_data.py).
+    "colored_mnist": TaskSpec(
+        "colored_mnist", time_limit=120.0,   # CNNs on 2-ch 28x28 are slow single-thread
+        regimes=[("low  (full data)", Fidelity("full", 1.0, {"train_frac": 1.0})),
+                 ("med  (25% data)", Fidelity("med", 1.0, {"train_frac": 0.25})),
+                 ("high (8% data)", Fidelity("high", 1.0, {"train_frac": 0.08}))]),
     # REGRESSION template (sklearn diabetes). metric="r2"; a worked example showing
     # the same pipeline handles regression. Teammates copy this shape for their tasks.
     "example_regression": TaskSpec(
