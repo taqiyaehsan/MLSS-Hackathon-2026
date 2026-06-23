@@ -38,6 +38,10 @@ from typing import Optional
 import numpy as np
 
 from gates import Fidelity, FULL
+from mlrc_background_knowledge import (
+    build_enriched_messages,
+    load_cross_run_history,
+)
 
 # --- paths -----------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -56,6 +60,7 @@ CRASH_SCORE = -10.0  # measured score assigned to a crashed / unparseable eval
 class Candidate:
     code: str                       # full proposed MyMethod.py content
     intent: str                     # the proposer's one-line stated intent
+    rationale: str = ""             # 2-4 sentence explanation of the approach
     static_ok: bool = True          # passed cheap parse/signature check
     static_reason: str = ""         # why static check failed (if it did)
     truth: Optional[dict] = None    # unused on the real task (synthetic-only field)
@@ -120,7 +125,12 @@ TASK_BRIEF = textwrap.dedent("""\
     selective layer re-init, parameter noise/pruning, fisher/EWC-style penalties,
     relabel-and-finetune, knowledge-distillation toward a retain-only signal, etc.
 
-    Respond with a JSON object: {"intent": "<one concise sentence>", "code": "<full file>"}.
+    Respond with a JSON object:
+    {
+      "intent": "<one concise sentence summarizing the change>",
+      "rationale": "<2-4 sentences explaining WHY this approach should improve the score: what mechanism drives forgetting, how it preserves retain/test accuracy, and what inspired the design (e.g. which expert method or prior failure)>",
+      "code": "<full file>"
+    }
     Put the entire file in "code" as a single string. No markdown fences.
 """)
 
@@ -152,16 +162,39 @@ def build_messages(current_code: str, best_score: float, history: list[dict]) ->
 
 
 class OpenAIProposer:
-    def __init__(self, model: str = "gpt-4.1-mini", temperature: float = 0.7):
+    def __init__(self, model: str = "gpt-4.1-mini", temperature: float = 0.7,
+                 use_background: bool = True, use_cross_run_history: bool = True,
+                 focus_best: bool = False):
         from dotenv import load_dotenv
         load_dotenv(Path(__file__).resolve().parent / ".env")
         from openai import OpenAI
         self.client = OpenAI()
         self.model = model
         self.temperature = temperature
+        self.use_background = use_background
+        self.use_cross_run_history = use_cross_run_history
+        self.focus_best = focus_best
+        self._cross_run_history = None
+
+    def _get_cross_run_history(self) -> list[dict]:
+        if self._cross_run_history is None:
+            self._cross_run_history = load_cross_run_history()
+        return self._cross_run_history
 
     def propose(self, current_code: str, best_score: float, history: list[dict]) -> Optional[Candidate]:
-        messages = build_messages(current_code, best_score, history)
+        if self.use_background or self.use_cross_run_history:
+            messages = build_enriched_messages(
+                current_code=current_code,
+                best_score=best_score,
+                session_history=history,
+                task_brief=TASK_BRIEF,
+                use_background=self.use_background,
+                use_cross_run_history=self.use_cross_run_history,
+                cross_run_history=self._get_cross_run_history() if self.use_cross_run_history else None,
+                focus_best=self.focus_best,
+            )
+        else:
+            messages = build_messages(current_code, best_score, history)
         try:
             resp = self.client.chat.completions.create(
                 model=self.model,
@@ -172,13 +205,15 @@ class OpenAIProposer:
             raw = resp.choices[0].message.content
             obj = json.loads(raw)
             code = obj.get("code", "")
-            intent = (obj.get("intent", "") or "").strip()[:300]
+            intent = (obj.get("intent", "") or "").strip()[:500]
+            rationale = (obj.get("rationale", "") or "").strip()[:1000]
         except Exception as e:  # noqa: BLE001 - any API/parse failure -> skip proposal
             print(f"  [proposer] error: {type(e).__name__}: {e}")
             return None
         code = _strip_fences(code)
         ok, reason = static_check(code)
-        return Candidate(code=code, intent=intent, static_ok=ok, static_reason=reason)
+        return Candidate(code=code, intent=intent, rationale=rationale,
+                         static_ok=ok, static_reason=reason)
 
 
 def _strip_fences(code: str) -> str:
@@ -203,7 +238,7 @@ class MLRCWorld:
 
     def __init__(self, proposer, snapshot_dir: Path, eval_timeout: float = 1200.0,
                  mock_eval: bool = False, mock_llm: bool = False, mock_sigma: float = 0.02,
-                 fidelity: Fidelity = FULL):
+                 fidelity: Fidelity = FULL, env_dir: Optional[Path] = None):
         self.proposer = proposer
         self.snapshot_dir = snapshot_dir
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -219,7 +254,11 @@ class MLRCWorld:
         self.sigma_mult = float(fidelity.params.get("sigma_mult", 1.0))
         self._mock_rng = np.random.default_rng(0)
 
-        self.best_code = METHOD_FILE.read_text()  # baseline file = starting incumbent
+        self.env_dir = env_dir or ENV_DIR
+        self.method_file = self.env_dir / "methods" / "MyMethod.py"
+        self.npz_file = self.env_dir / "dev_results" / "my_method_results.npz"
+
+        self.best_code = self.method_file.read_text()  # baseline file = starting incumbent
         self.best_score = float("-inf")
         self.history: list[dict] = []
         self.step_counter = 0
@@ -248,11 +287,11 @@ class MLRCWorld:
         self.eval_calls += 1
         if self.mock_eval:
             return self._mock_evaluate(candidate)
-        METHOD_FILE.write_text(candidate.code)
+        self.method_file.write_text(candidate.code)
         try:
             score, detail = self._run_eval()
         finally:
-            METHOD_FILE.write_text(self.best_code)  # always restore incumbent on disk
+            self.method_file.write_text(self.best_code)  # always restore incumbent on disk
         candidate.truth = detail  # stash last eval detail for logging
         return score
 
@@ -270,41 +309,35 @@ class MLRCWorld:
     def _run_eval(self) -> tuple[float, dict]:
         # Remove any stale result so a crash can't read a previous run's score.
         try:
-            NPZ_FILE.unlink()
+            self.npz_file.unlink()
         except FileNotFoundError:
             pass
         env = dict(os.environ)
         env["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+        env["PYTHONUNBUFFERED"] = "1"
         if self.num_models is not None:  # cost lever -> MLRC evaluation.py reads this
             env["MU_NUM_MODELS"] = str(self.num_models)
         t0 = time.time()
         try:
             proc = subprocess.run(
-                [sys.executable, "main.py", "-m", "my_method", "-p", "dev"],
-                cwd=str(ENV_DIR), env=env, capture_output=True, text=True,
+                [sys.executable, "-u", "main.py", "-m", "my_method", "-p", "dev"],
+                cwd=str(self.env_dir), env=env,
+                stdout=None, stderr=None,
                 timeout=self.eval_timeout,
             )
         except subprocess.TimeoutExpired:
             return CRASH_SCORE, {"crash": "timeout", "wall_s": time.time() - t0}
         wall = time.time() - t0
         detail = {"returncode": proc.returncode, "wall_s": wall}
-        # Authoritative score from the npz; stdout regex only enriches the log.
-        if NPZ_FILE.exists():
+        if self.npz_file.exists():
             try:
-                with np.load(NPZ_FILE) as d:
+                with np.load(self.npz_file) as d:
                     score = float(d["total_score"])
-                detail.update(self._parse_stdout(proc.stdout))
                 detail["score_source"] = "npz"
                 return score, detail
             except Exception as e:  # noqa: BLE001
                 detail["npz_error"] = str(e)
-        m = re.search(r"Final Score:\s*([-\d.]+)", proc.stdout)
-        if m:
-            detail["score_source"] = "stdout"
-            detail.update(self._parse_stdout(proc.stdout))
-            return float(m.group(1)), detail
         detail["crash"] = "no_score"
-        detail["stderr_tail"] = proc.stderr[-600:]
         return CRASH_SCORE, detail
 
     @staticmethod
@@ -322,7 +355,7 @@ class MLRCWorld:
     def on_accept(self, candidate: Candidate, decision) -> None:
         self.best_code = candidate.code
         self.best_score = float(np.mean(decision.candidate_scores)) if decision.candidate_scores else self.best_score
-        METHOD_FILE.write_text(self.best_code)  # disk now holds the new incumbent
+        self.method_file.write_text(self.best_code)  # disk now holds the new incumbent
 
     # -- snapshot every proposal (for audit + honest discards) --------------
     def snapshot(self, candidate: Candidate, status: str) -> str:

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import textwrap
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +42,30 @@ FIDELITIES = {
     "full": FULL,
     "cheap": Fidelity(name="cheap", cost=0.3, params={"num_models": 3, "sigma_mult": 1.6}),
 }
+
+
+def _load_saved_baseline(results_root: Path) -> float | None:
+    """Scan previous runs for a baseline score. Returns the most recent one, or None."""
+    if not results_root.exists():
+        return None
+    best = None
+    best_time = ""
+    for run_dir in results_root.iterdir():
+        if not run_dir.is_dir() or not run_dir.name.startswith("mlrc_"):
+            continue
+        summary = run_dir / "summary.json"
+        if not summary.exists():
+            continue
+        try:
+            data = json.loads(summary.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        score = data.get("baseline_score")
+        started = data.get("started", "")
+        if score is not None and score > 0 and started >= best_time:
+            best = score
+            best_time = started
+    return best
 
 
 def build_policy(arm: str, world: MLRCWorld, eval_cost: float = 1.0):
@@ -68,19 +93,36 @@ def main():
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--seed", type=int, default=0, help="outer seed (logging + RNG label)")
     ap.add_argument("--run-id", default=None)
-    ap.add_argument("--eval-timeout", type=float, default=1200.0)
+    ap.add_argument("--eval-timeout", type=float, default=1800.0)
     ap.add_argument("--mock-llm", action="store_true", help="skip OpenAI; trivial valid edits")
     ap.add_argument("--mock-eval", action="store_true", help="skip real eval; synthetic score")
+    ap.add_argument("--no-background", action="store_true",
+                    help="disable expert background.txt in GPT prompt")
+    ap.add_argument("--no-history", action="store_true",
+                    help="disable cross-run history in GPT prompt")
+    ap.add_argument("--focus-best", action="store_true",
+                    help="highlight top methods from previous runs and instruct "
+                         "the LLM to extend the current best (default: show flat "
+                         "history and allow any approach)")
+    ap.add_argument("--no-reuse-baseline", action="store_true",
+                    help="force a fresh baseline eval instead of reusing a saved one")
     ap.add_argument("--reset-from", default=str(BASELINE_FILE),
                     help="reset MyMethod.py from this canonical baseline before the run "
                          "(ensures every arm starts identical); '' to skip")
+    ap.add_argument("--env-dir", default=None,
+                    help="path to a separate env/ copy for parallel runs (avoids "
+                         "MyMethod.py write conflicts)")
     args = ap.parse_args()
+
+    # Resolve env_dir for parallel isolation (each run gets its own MyMethod.py).
+    env_dir = Path(args.env_dir) if args.env_dir else None
+    method_file = (env_dir / "methods" / "MyMethod.py") if env_dir else METHOD_FILE
 
     # Reset the edit target to the canonical baseline so every arm starts from the
     # SAME incumbent (a prior accepting run leaves its method on disk otherwise).
     if args.reset_from and Path(args.reset_from).exists():
-        METHOD_FILE.write_text(Path(args.reset_from).read_text())
-        print(f"reset {METHOD_FILE.name} from {Path(args.reset_from).name}")
+        method_file.write_text(Path(args.reset_from).read_text())
+        print(f"reset {method_file.name} from {Path(args.reset_from).name}")
 
     run_id = args.run_id or f"mlrc_{args.arm}_s{args.seed}_{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
     run_dir = RESULTS_ROOT / run_id
@@ -93,11 +135,16 @@ def main():
         log_f.flush()
 
     fidelity = FIDELITIES[args.fidelity]
-    proposer = None if args.mock_llm else OpenAIProposer(args.model, args.temperature)
+    proposer = None if args.mock_llm else OpenAIProposer(
+        args.model, args.temperature,
+        use_background=not args.no_background,
+        use_cross_run_history=not args.no_history,
+        focus_best=args.focus_best,
+    )
     world = MLRCWorld(proposer, snapshot_dir=run_dir / "proposals",
                       eval_timeout=args.eval_timeout,
                       mock_eval=args.mock_eval, mock_llm=args.mock_llm,
-                      fidelity=fidelity)
+                      fidelity=fidelity, env_dir=env_dir)
     policy = build_policy(args.arm, world, eval_cost=fidelity.cost)
     budget = Budget(args.budget)
 
@@ -112,18 +159,29 @@ def main():
     (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
     print(f"== run {run_id} | arm={args.arm} | budget={args.budget} ==")
 
-    # --- baseline incumbent: measure the starting MyMethod once (1 unit) ----
-    base_cand = Candidate(code=world.best_code, intent="baseline", static_ok=True)
-    print("measuring baseline ...")
-    t0 = time.time()
-    base_score = world.evaluate(base_cand, seed=5000 + args.seed)
-    budget.charge(fidelity.cost)
-    world.best_score = base_score
-    incumbent = Incumbent(scores=[base_score])
-    emit({"step": -1, "kind": "baseline", "score": base_score,
-          "wall_s": time.time() - t0, "budget_spent_after": budget.spent,
-          "detail": base_cand.truth})
-    print(f"baseline score = {base_score:.4f}  ({time.time()-t0:.0f}s)")
+    # --- baseline incumbent: reuse saved score or measure fresh ----
+    base_score = None
+    if not args.no_reuse_baseline:
+        base_score = _load_saved_baseline(RESULTS_ROOT)
+    if base_score is not None:
+        print(f"reusing saved baseline score = {base_score:.4f}")
+        world.best_score = base_score
+        incumbent = Incumbent(scores=[base_score])
+        emit({"step": -1, "kind": "baseline", "score": base_score,
+              "wall_s": 0.0, "budget_spent_after": 0.0,
+              "detail": {"score_source": "cached"}})
+    else:
+        base_cand = Candidate(code=world.best_code, intent="baseline", static_ok=True)
+        print("measuring baseline (no saved score found) ...")
+        t0 = time.time()
+        base_score = world.evaluate(base_cand, seed=5000 + args.seed)
+        budget.charge(fidelity.cost)
+        world.best_score = base_score
+        incumbent = Incumbent(scores=[base_score])
+        emit({"step": -1, "kind": "baseline", "score": base_score,
+              "wall_s": time.time() - t0, "budget_spent_after": budget.spent,
+              "detail": base_cand.truth})
+        print(f"baseline score = {base_score:.4f}  ({time.time()-t0:.0f}s)")
 
     # --- the loop -----------------------------------------------------------
     seed_counter = 10_000 + args.seed * 1000
@@ -138,6 +196,19 @@ def main():
             print(f"[{step}] proposal failed; stopping.")
             break
         seed_counter += 100
+
+        # --- BEFORE eval: show what GPT proposed ---
+        print(f"\n{'='*70}")
+        print(f"  STEP {step}/{int(budget.total) - 1}  |  budget spent: {budget.spent:.1f}/{budget.total:.0f}")
+        print(f"{'='*70}")
+        print(f"  LLM PROPOSAL: {cand.intent}")
+        if cand.rationale:
+            print(f"  RATIONALE:")
+            for line in textwrap.wrap(cand.rationale, width=64):
+                print(f"    {line}")
+        static_status = "PASS" if cand.static_ok else f"FAIL ({cand.static_reason})"
+        print(f"  Static check: {static_status}")
+        print(f"  Evaluating...", flush=True)
 
         dec = policy.decide(cand, world.evaluate, incumbent, budget, seed_counter)
 
@@ -155,9 +226,31 @@ def main():
 
         snap = world.snapshot(cand, status)
         mean_score = float(np.mean(dec.candidate_scores)) if dec.candidate_scores else None
+
+        # --- AFTER eval: show results ---
+        detail = cand.truth or {}
+        print(f"  {'-'*66}")
+        if is_crash:
+            print(f"  RESULT: CRASHED — {detail.get('crash', 'unknown error')}")
+        else:
+            ms_str = f"{mean_score:.4f}" if mean_score is not None else "n/a"
+            print(f"  RESULT: score = {ms_str}  (current best = {world.best_score:.4f})")
+            if detail.get("forget_quality") is not None:
+                print(f"    Forgetting Quality:  {detail['forget_quality']:.4f}")
+            if detail.get("retain_ratio") is not None:
+                print(f"    Retain Acc Ratio:    {detail['retain_ratio']:.4f}")
+            if detail.get("test_ratio") is not None:
+                print(f"    Test Acc Ratio:      {detail['test_ratio']:.4f}")
+        verdict = "*** ACCEPTED ***" if dec.accepted else ("CULLED" if dec.culled else "REJECTED")
+        print(f"  VERDICT: {verdict}  ({dec.reason})")
+        if dec.accepted:
+            print(f"  >> New best score: {world.best_score:.4f}")
+        print(f"  Wall time: {time.time() - t_step:.0f}s")
+        print(f"{'='*70}", flush=True)
+
         rec = {
             "step": step, "kind": "proposal", "status": status, "accepted": dec.accepted,
-            "reason": dec.reason, "intent": cand.intent,
+            "reason": dec.reason, "intent": cand.intent, "rationale": cand.rationale,
             "static_ok": cand.static_ok, "static_reason": cand.static_reason,
             "scores": dec.candidate_scores, "mean_score": mean_score,
             "delta_hat": dec.delta_hat, "se_hat": dec.se_hat,
@@ -169,10 +262,6 @@ def main():
         world.history.append({"intent": cand.intent,
                               "score": mean_score if mean_score is not None else -99.0,
                               "accepted": dec.accepted})
-        flag = "***ACCEPT***" if dec.accepted else status.upper()
-        ms = f"{mean_score:.4f}" if mean_score is not None else "  n/a "
-        print(f"[{step}] {flag:12s} score={ms} best={world.best_score:.4f} "
-              f"spent={budget.spent:.2f}/{budget.total:.0f}  :: {cand.intent[:70]}")
 
         if dec.units_spent == 0.0 and not dec.culled:
             print("policy could not afford an action; stopping.")
