@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import csv
 import json
+import signal
 import sys
 import time
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -102,6 +104,24 @@ def generate_pool(spec: LT.TaskSpec, n_proposals: int, model: str, mock_llm: boo
 #    already vetted by the coherence gate + one subprocess eval in generation).
 # ---------------------------------------------------------------------------
 
+@contextmanager
+def _time_limit(seconds: float):
+    """Wall-clock cap for in-process scoring via SIGALRM (main thread, Unix). A method
+    that exceeds it raises TimeoutError -> caught like any crash -> CRASH_SCORE. This
+    is the scoring-stage analog of the per-eval timeout generation already enforces:
+    without it, ONE pathological method (e.g. a huge/slow CNN that timed out in
+    generation) hangs the whole study indefinitely."""
+    def _handler(signum, frame):
+        raise TimeoutError(f"scoring exceeded {seconds:.0f}s")
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
 def _load_class(code: str, tmp: Path):
     tmp.write_text(code)
     return run_method._load_method_class(str(tmp))
@@ -131,15 +151,20 @@ def score_matrix(spec: LT.TaskSpec, pool: list[dict], n_seeds: int,
         # CRASH_SCORE rather than aborting the whole study (the "automated debugging"
         # story: broken edits fail loudly but cheaply, they don't kill the run).
         try:
-            cls = _load_class(c["code"], tmpdir / f"cand_{c['idx']}.py")
-            vals, walls = [], []
-            for s in range(n_seeds):
-                m = cls(); t0 = time.time(); m.fit(Xtr, ytr, SEED0 + s)
-                walls.append(time.time() - t0)
-                vals.append(run_method._score(metric, m.predict(data["X_va"]), data["y_va"]))
-            mt = cls(); mt.fit(Xtr, ytr, SEED0 + 999)
-            test = run_method._score(metric, mt.predict(data["X_te"]), data["y_te"])
-            flops = _measure_flops(cls, Xtr, ytr)
+            # Per-method wall-clock cap (the scoring-stage analog of generation's
+            # per-eval timeout): a method that hangs/runs absurdly long is scored as a
+            # crash instead of stalling the whole study. ~3x the per-eval limit covers
+            # n_seeds fits + test + FLOPs for any healthy method.
+            with _time_limit(spec.time_limit * 3):
+                cls = _load_class(c["code"], tmpdir / f"cand_{c['idx']}.py")
+                vals, walls = [], []
+                for s in range(n_seeds):
+                    m = cls(); t0 = time.time(); m.fit(Xtr, ytr, SEED0 + s)
+                    walls.append(time.time() - t0)
+                    vals.append(run_method._score(metric, m.predict(data["X_va"]), data["y_va"]))
+                mt = cls(); mt.fit(Xtr, ytr, SEED0 + 999)
+                test = run_method._score(metric, mt.predict(data["X_te"]), data["y_te"])
+                flops = _measure_flops(cls, Xtr, ytr)
         except Exception as e:  # noqa: BLE001 - any failure in agent code -> crash score
             print(f"    [score_matrix] idx {c['idx']} crashed: {type(e).__name__}: {e}")
             vals = [float(LT.CRASH_SCORE)] * n_seeds

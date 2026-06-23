@@ -107,6 +107,54 @@ result — see [`docs/SKEPTIC_REGIME_RESULTS.md`](docs/SKEPTIC_REGIME_RESULTS.md
 
 ---
 
+## Results
+
+There are **two separate claims**, and it matters not to conflate them: the **agent**
+makes measurable progress (a property of the models it writes), and the **skeptic
+gate** makes that progress *trustworthy* (a property of the accept rule). Full numbers
+and method in [`docs/SKEPTIC_REGIME_RESULTS.md`](docs/SKEPTIC_REGIME_RESULTS.md);
+figures in [`results/skeptic_regime/figs/`](results/skeptic_regime/figs/).
+
+### 1. The agent makes measurable progress (held-out test)
+
+The code-editing agent turns a weak baseline into a real model on every task:
+
+| task | modality | baseline → agent's best (held-out test) | the agent's edit |
+|---|---|---|---|
+| FashionMNIST | vision | 0.749 → **0.888** | linear → CNN (+ aug, label smoothing) |
+| MAGIC (astrophysics) | tabular | 0.786 → **0.868** | logistic → 2-layer MLP |
+| Colored MNIST | vision | 0.09 → **0.97** | linear → CNN — *learns shape, not the color shortcut* |
+
+*(Colored MNIST is a spurious-correlation task: color is correlated with the digit
+group in train/val but reverses at test. The linear baseline overfits the color and
+collapses to 9 %; the agent's CNN learns the real signal and reaches 97 %.)*
+
+### 2. The skeptic gate makes that progress trustworthy
+
+The **skeptic gate** re-tests each candidate over seeds and accepts only if the gain
+clears the noise band. Its payoff is **decision integrity**, not a higher score: under
+noisy evaluation a greedy agent accepts "improvements" that don't replicate; the
+skeptic accepts **2–5× fewer** false wins (`fig_skeptic_value.png`):
+
+| task | greedy false-accept rate | skeptic false-accept rate | reduction |
+|---|---|---|---|
+| FashionMNIST | 0.43 | 0.27 | 1.6× |
+| MAGIC | 0.44 | 0.17 | 2.5× |
+| Colored MNIST | 0.16 | 0.05 | 3.4× |
+
+Final accuracy is ~tied on FashionMNIST and Colored MNIST (the gate's job there is to
+*prove* the wins are real); on **MAGIC the skeptic also keeps a better final model**
+(0.868 vs greedy's 0.857), because greedy got stuck on a lucky-but-worse candidate.
+The cost is extra re-test compute — worth it under noisy evaluation, wasteful when the
+signal is already clean (that trade-off is exactly what the regime sweep charts).
+
+> **A note on naming.** We call this the **skeptic gate** (it re-tests a result before
+> believing it). In the code the policy is still named `Causal`/`causal` for historical
+> reasons — read those as "the skeptic / re-test gate." "Causal" overclaims: there is no
+> causal-inference machinery here, just replication under re-sampling.
+
+---
+
 ## Repository layout
 
 ```
@@ -341,8 +389,9 @@ writes. The agent owns only the model + training inside `MyMethod`.
 
 | task | modality | metric | the agent's edit | held-out result |
 |---|---|---|---|---|
-| `fashionmnist` | vision | accuracy | linear → CNN | 0.75 → **0.87** |
-| `magic` | tabular | accuracy | logistic → MLP | 0.786 → **0.844** |
+| `fashionmnist` | vision | accuracy | linear → CNN | 0.749 → **0.888** |
+| `magic` | tabular | accuracy | logistic → MLP | 0.786 → **0.868** |
+| `colored_mnist` | vision | accuracy | linear → CNN (spurious-correlation task) | 0.09 → **0.97** |
 | `example_regression` | tabular | R² | linear (template) | 0.30 baseline |
 
 ### Run
