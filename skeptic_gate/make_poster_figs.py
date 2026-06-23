@@ -226,7 +226,7 @@ def fig_regime_fp(data: dict, out: Path):
         ax.plot(x, [p["greedy"]["fp_rate"] for p in pts], "-o", color=GREEDY_C,
                 label="greedy (accept on 1 score)", lw=2)
         ax.plot(x, [p["causal"]["fp_rate"] for p in pts], "-s", color=CAUSAL_C,
-                label="causal skeptic (re-test)", lw=2)
+                label="skeptic (re-test)", lw=2)
         ax.set_xlabel("evaluation noise  (std of the noisy score)")
         ax.set_title(TASK_LABEL[task])
         ax.set_ylim(0, max(0.6, ax.get_ylim()[1]))
@@ -249,7 +249,7 @@ def fig_regime_acc(data: dict, out: Path):
         ax.plot(x, [p["greedy"]["mean_final_acc"] for p in pts], "-o", color=GREEDY_C,
                 label="greedy", lw=2)
         ax.plot(x, [p["causal"]["mean_final_acc"] for p in pts], "-s", color=CAUSAL_C,
-                label="causal skeptic", lw=2)
+                label="skeptic", lw=2)
         ax.set_xlabel("evaluation noise  (std of the noisy score)")
         ax.set_ylabel("final model accuracy")
         ax.set_title(TASK_LABEL[task])
@@ -308,7 +308,7 @@ def fig_spurious(cdata: dict, out: Path):
         axB.plot(x, [p["greedy"]["fp_rate"] for p in pts], "-o", color=GREEDY_C, lw=2,
                  label="greedy (accept on 1 score)")
         axB.plot(x, [p["causal"]["fp_rate"] for p in pts], "-s", color=CAUSAL_C, lw=2,
-                 label="causal skeptic (re-test)")
+                 label="skeptic (re-test)")
         axB.set_xlabel("evaluation noise  (std of the noisy score)")
         axB.set_ylabel("false-positive rate")
         axB.set_ylim(0, max(0.3, axB.get_ylim()[1]))
@@ -320,6 +320,46 @@ def fig_spurious(cdata: dict, out: Path):
                  "collapses on the flipped test, the CNN doesn't", fontsize=12, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     fig.savefig(out / "fig_spurious.png")
+    plt.close(fig)
+
+
+def fig_skeptic_value(regimes: dict, out: Path):
+    """One-panel summary of what the SKEPTIC buys: the mean false-accept rate (greedy
+    vs skeptic) across the eval-noise sweep, per task. This isolates the gate's
+    contribution -- decision integrity -- which lives in the false-accept rate, not in
+    final accuracy. Whiskers = range over noise levels. Drawn if any regime present."""
+    import numpy as _np
+    items = [(t, r) for t, r in regimes.items() if r]
+    if not items:
+        print("  ! no regime data; skipping fig_skeptic_value")
+        return
+    labels, g_mean, c_mean, g_err, c_err, factor = [], [], [], [], [], []
+    for t, r in items:
+        g = [p["greedy"]["fp_rate"] for p in r["points"]]
+        c = [p["causal"]["fp_rate"] for p in r["points"]]
+        gm, cm = float(_np.mean(g)), float(_np.mean(c))
+        labels.append(TASK_LABEL.get(t, t))
+        g_mean.append(gm); c_mean.append(cm)
+        g_err.append([gm - min(g), max(g) - gm]); c_err.append([cm - min(c), max(c) - cm])
+        factor.append(gm / max(cm, 1e-9))
+    x = _np.arange(len(items)); w = 0.36
+    fig, ax = plt.subplots(figsize=(7.4, 4.6))
+    ax.bar(x - w / 2, g_mean, w, yerr=_np.array(g_err).T, capsize=4, color=GREEDY_C,
+           label="greedy (accept on 1 score)")
+    ax.bar(x + w / 2, c_mean, w, yerr=_np.array(c_err).T, capsize=4, color=CAUSAL_C,
+           label="skeptic (re-test over seeds)")
+    for i in range(len(items)):
+        top = max(g_mean[i] + g_err[i][1], c_mean[i] + c_err[i][1])
+        ax.annotate(f"{factor[i]:.1f}× fewer", (x[i], top + 0.025), ha="center",
+                    fontsize=10, weight="bold", color="#333")
+    ax.set_xticks(x); ax.set_xticklabels(labels)
+    ax.set_ylabel("false-accept rate\n(kept a change that wasn't real)")
+    ax.set_ylim(0, max(g_mean) + 0.2)
+    ax.set_title("What the skeptic buys: fewer false ‘discoveries’ under noisy evaluation\n"
+                 "(bars = mean over the eval-noise sweep; whiskers = range)")
+    ax.legend(loc="upper right")
+    fig.tight_layout()
+    fig.savefig(out / "fig_skeptic_value.png")
     plt.close(fig)
 
 
@@ -353,6 +393,7 @@ def main():
     # progress/Pareto story), so it gets its own figure rather than a panel in the
     # two-task figures above. Drawn only if its data is present.
     cdir = _task_dir(root, "colored_mnist")
+    cdata = None
     if cdir:
         cdata = {"methods": load_methods(cdir), "regime": load_regime(cdir)}
         print(f"  {'colored_mnist':13s} <- {cdir}  ({len(cdata['methods'])} methods, "
@@ -360,6 +401,12 @@ def main():
         fig_spurious(cdata, out)
     else:
         print("  ! no data dir found for colored_mnist (skipping fig_spurious)")
+
+    # what-the-skeptic-buys summary: false-accept rate (greedy vs skeptic) across tasks
+    regimes = {t: data[t]["regime"] for t in TASKS}
+    if cdata:
+        regimes["colored_mnist"] = cdata["regime"]
+    fig_skeptic_value(regimes, out)
 
     print(f"\nwrote figures to {out}")
     for p in sorted(out.glob("fig_*.png")):
