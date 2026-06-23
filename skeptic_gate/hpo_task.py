@@ -138,6 +138,49 @@ def _load_magic(n_total: int = 10_000):
     return _split_scale(Xs, ys, "standard")
 
 
+
+# ---------------------------------------------------------------------------
+# Optiver Trading at the Close: binary direction classification.
+#
+# This HPO loader intentionally reads a small cached .npz file, not the raw
+# Kaggle CSV. Build the cache once with:
+#
+#   python prepare_optiver_direction_hpo.py
+#
+# Label: 1 if the Optiver target is positive, else 0.
+# ---------------------------------------------------------------------------
+def _load_optiver_direction():
+    root = Path(__file__).resolve().parents[1]
+    path = root / "data" / "optiver" / "optiver_direction_hpo.npz"
+
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Missing cached Optiver tensor file: {path}\n"
+            "Run from the repo root:\n"
+            "  python prepare_optiver_direction_hpo.py "
+            "--csv data/optiver/train.csv "
+            "--out data/optiver/optiver_direction_hpo.npz"
+        )
+
+    z = np.load(path)
+
+    print(
+        f"[optiver_direction] loaded {path}; "
+        f"train={z['X_tr'].shape}, val={z['X_va'].shape}, test={z['X_te'].shape}; "
+        f"positive rate train/val/test="
+        f"{z['y_tr'].mean():.3f}/{z['y_va'].mean():.3f}/{z['y_te'].mean():.3f}"
+    )
+
+    return {
+        "X_tr": torch.from_numpy(z["X_tr"].astype(np.float32)),
+        "y_tr": torch.from_numpy(z["y_tr"].astype(np.int64)),
+        "X_va": torch.from_numpy(z["X_va"].astype(np.float32)),
+        "y_va": torch.from_numpy(z["y_va"].astype(np.int64)),
+        "X_te": torch.from_numpy(z["X_te"].astype(np.float32)),
+        "y_te": torch.from_numpy(z["y_te"].astype(np.int64)),
+    }
+
+
 @dataclass
 class DatasetSpec:
     name: str
@@ -174,6 +217,22 @@ DATASETS: dict[str, DatasetSpec] = {
         [("low  (full data)", Fidelity("full", 1.0, {"train_subset": None})),
          ("med  (150 samples)", Fidelity("med", 1.0, {"train_subset": 150})),
          ("high (50 samples)", Fidelity("high", 1.0, {"train_subset": 50}))]),
+
+    "optiver_direction": DatasetSpec(
+        "optiver_direction",
+        _load_optiver_direction,
+        30,
+        2,
+        "Optiver Trading at the Close: binary classification of whether the "
+        "future closing-auction price movement target is positive, using "
+        "market microstructure and auction-book features",
+        [
+            ("low (full data)", Fidelity("full", 1.0, {"train_subset": None})),
+            ("med (1200 samples)", Fidelity("med", 1.0, {"train_subset": 1200})),
+            ("high (300 samples)", Fidelity("high", 1.0, {"train_subset": 300})),
+        ],
+    ),
+
 }
 
 # Active-dataset module state. Defaults to `digits` so existing callers (smoke
@@ -759,7 +818,7 @@ def main(seeds=(0, 1, 2, 3, 4), use_llm: bool = False, budget: float = 40.0,
 
 _USAGE = (
     "usage:\n"
-    "  python hpo_task.py [digits|fmnist|magic]            # programmatic regime sweep\n"
+    "  python hpo_task.py [digits|fmnist|magic|optiver_direction]            # programmatic regime sweep\n"
     "  python hpo_task.py <dataset> llm [SEEDS] [BUDGET]   # AGENTIC sweep (LLM proposer)\n"
     "  python hpo_task.py llm [dataset]                    # single live LLM-agent demo")
 
