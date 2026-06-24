@@ -246,6 +246,28 @@ def mlrc_result():
 # =====================================================================
 # Optiver — failed experiment (no signal)
 # =====================================================================
+def optiver_phantom():
+    """Optiver: greedy accepts phantom wins that vanish on re-test; skeptic banks ~none.
+    Per-run means across the 3 noise regimes (from the Optiver hpo summary)."""
+    # accepted / vanished per run, averaged over regimes
+    greedy_acc = np.mean([2.2, 3.0, 1.0]); greedy_van = np.mean([1.0, 1.4, 1.0])
+    causal_acc = np.mean([0.0, 1.0, 0.0]); causal_van = np.mean([0.0, 0.8, 0.0])
+    arms = ["greedy", "skeptic"]
+    total = [greedy_acc, causal_acc]
+    vanished = [greedy_van, causal_van]
+    survived = [t - v for t, v in zip(total, vanished)]
+    x = np.arange(2)
+    fig, ax = plt.subplots(figsize=(7.0, 4.8)); style(ax)
+    ax.bar(x, vanished, 0.5, color=RED, zorder=3, label="vanished on re-test")
+    ax.bar(x, survived, 0.5, bottom=vanished, color=LAV, zorder=3, label="survived")
+    for i, t in enumerate(total):
+        ax.text(x[i], t + 0.05, f"{t:.1f}", ha="center", color=INK, fontsize=13, fontweight="bold")
+    ax.set_xticks(x); ax.set_xticklabels(arms, color=INK, fontsize=13)
+    ax.set_ylim(0, 2.6); ax.set_ylabel("'wins' accepted per run")
+    ax.legend(frameon=False, loc="upper right")
+    save(fig, "optiver_phantom.png")
+
+
 def optiver_fail():
     fig, ax = plt.subplots(figsize=(7.2, 4.8)); style(ax)
     labels = ["baseline", "agent's best\n(tuning)"]
@@ -402,7 +424,7 @@ if __name__ == "__main__":
     cmnist_data(); cmnist_fail()
     fmnist_samples()
     progress(); regime(); skeptic_value()
-    mlrc_result(); optiver_fail(); cost_compute()
+    mlrc_result(); optiver_fail(); optiver_phantom(); cost_compute()
     code_edit()
     score_table(); tasks_attempted()
     print("done.")
