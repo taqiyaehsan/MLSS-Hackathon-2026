@@ -191,25 +191,54 @@ def skeptic_value():
 # =====================================================================
 # MLRC Machine Unlearning — greedy vs skeptic score progression
 # =====================================================================
+MLRC_DIR = Path(__file__).resolve().parent / "mlrc_runs"
+
+def _mu_runs(arm):
+    """Read each run's (budget_spent, best-so-far) trajectory from results.jsonl."""
+    import glob
+    runs = []
+    for f in sorted(glob.glob(str(MLRC_DIR / f"mlrc_{arm}_*.jsonl"))):
+        pts = []
+        for line in open(f):
+            d = json.loads(line)
+            if d.get("kind") == "baseline":
+                pts.append((0.0, d["score"]))
+            else:
+                pts.append((d["budget_spent_after"], d["incumbent_best"]))
+        if pts:
+            runs.append(sorted(pts))
+    return runs
+
+def _stepfill(pts, grid):
+    """Forward-fill best-so-far onto a common budget grid (x = eval calls spent)."""
+    out = []
+    for b in grid:
+        v = pts[0][1]
+        for pb, pv in pts:
+            if pb <= b + 1e-9: v = pv
+            else: break
+        out.append(v)
+    return np.array(out)
+
 def mlrc_result():
-    b = np.arange(0, 9); base = 0.0545
-    causal_m = np.array([0.0545,0.0545,0.062,0.078,0.093,0.101,0.105,0.105,0.105])
-    causal_s = np.array([0.0,0.0,0.015,0.022,0.028,0.032,0.035,0.035,0.035])
-    greedy_m = np.array([0.0545,0.0545,0.056,0.058,0.060,0.063,0.068,0.078,0.092])
-    greedy_s = np.array([0.0,0.0,0.005,0.008,0.012,0.018,0.025,0.030,0.035])
+    # REAL data from the team's MLRC runs; x = cumulative eval calls (budget spent),
+    # so greedy and causal both span 0->8 at equal compute (not the proposal-index axis).
+    grid = np.arange(0, 8.0001, 0.2); base = 0.0545
+    greedy = np.array([_stepfill(r, grid) for r in _mu_runs("greedy")])
+    causal = np.array([_stepfill(r, grid) for r in _mu_runs("causal")])
+    gm, gs = greedy.mean(0), greedy.std(0)
+    cm, cs = causal.mean(0), causal.std(0)
     fig, ax = plt.subplots(figsize=(9.2, 5.2)); style(ax)
     ax.axhline(base, color=MUTE, ls=(0, (5, 3)), lw=1.6)
-    ax.text(0.15, base + 0.0035, f"baseline {base:.3f}", color=MUTE, fontsize=10.5, va="bottom")
-    ax.fill_between(b, greedy_m-greedy_s, greedy_m+greedy_s, color=RED, alpha=0.13, lw=0)
-    ax.fill_between(b, causal_m-causal_s, causal_m+causal_s, color=PURPLE, alpha=0.13, lw=0)
-    ax.plot(b, greedy_m, "-o", color=RED, lw=2.8, ms=6, label="greedy (n=4)", zorder=5)
-    ax.plot(b, causal_m, "-o", color=PURPLE, lw=2.8, ms=6, label="skeptic (n=5)", zorder=5)
-    ax.text(8.12, causal_m[-1] + 0.001, f"{causal_m[-1]:.3f}", color=PURPLE, fontsize=13,
-            fontweight="bold", va="center")
-    ax.text(8.12, greedy_m[-1] - 0.001, f"{greedy_m[-1]:.3f}", color=RED, fontsize=13,
-            fontweight="bold", va="center")
+    ax.text(0.1, base + 0.003, f"baseline {base:.3f}", color=MUTE, fontsize=10.5, va="bottom")
+    ax.fill_between(grid, gm-gs, gm+gs, color=RED, alpha=0.12, lw=0)
+    ax.fill_between(grid, cm-cs, cm+cs, color=PURPLE, alpha=0.12, lw=0)
+    ax.plot(grid, gm, color=RED, lw=2.8, label=f"greedy (n={len(greedy)})", zorder=5)
+    ax.plot(grid, cm, color=PURPLE, lw=2.8, label=f"skeptic (n={len(causal)})", zorder=5)
+    ax.text(8.15, cm[-1] + 0.001, f"{cm[-1]:.3f}", color=PURPLE, fontsize=13, fontweight="bold", va="center")
+    ax.text(8.15, gm[-1] - 0.001, f"{gm[-1]:.3f}", color=RED, fontsize=13, fontweight="bold", va="center")
     ax.set_xlabel("eval calls (budget spent)"); ax.set_ylabel("best unlearning score so far")
-    ax.set_xlim(0, 9.6); ax.set_ylim(0.045, 0.145)
+    ax.set_xlim(0, 9.6); ax.set_ylim(0.045, 0.16)
     ax.legend(frameon=False, loc="upper left")
     save(fig, "mlrc_result.png")
 
