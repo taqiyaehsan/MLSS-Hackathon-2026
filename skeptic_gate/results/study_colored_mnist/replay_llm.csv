@@ -1,0 +1,7 @@
+task,arm,n_accepted,n_vanished,n_survive,accept_idx,prev_idx,apparent,true_before,true_after,true_gain,survives
+colored_mnist,greedy,3,0,3,1,0,0.978000,0.827067,0.977200,0.150133,1
+colored_mnist,greedy,3,0,3,4,1,0.980667,0.977200,0.978933,0.001733,1
+colored_mnist,greedy,3,0,3,8,4,0.985333,0.978933,0.987867,0.008933,1
+colored_mnist,causal,3,0,3,1,0,0.977667,0.827067,0.977200,0.150133,1
+colored_mnist,causal,3,0,3,4,1,0.979667,0.977200,0.978933,0.001733,1
+colored_mnist,causal,3,0,3,8,4,0.987000,0.978933,0.987867,0.008933,1

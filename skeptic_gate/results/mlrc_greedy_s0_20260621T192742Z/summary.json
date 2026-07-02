@@ -1,0 +1,28 @@
+{
+  "run_id": "mlrc_greedy_s0_20260621T192742Z",
+  "arm": "greedy",
+  "policy": "greedy",
+  "budget": 6.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 0,
+  "fidelity": "cheap",
+  "fidelity_cost": 0.3,
+  "fidelity_params": {
+    "num_models": 3,
+    "sigma_mult": 1.6
+  },
+  "mock_llm": true,
+  "mock_eval": true,
+  "started": "2026-06-21T19:27:42.694225+00:00",
+  "finished": "2026-06-21T19:27:42.701658+00:00",
+  "baseline_score": 0.058023367074988584,
+  "best_score": 0.09572800144416439,
+  "improvement": 0.03770463436917581,
+  "n_proposals": 19,
+  "n_accepted": 2,
+  "n_culled": 0,
+  "n_crashed": 0,
+  "eval_calls": 20,
+  "budget_spent": 5.999999999999998
+}

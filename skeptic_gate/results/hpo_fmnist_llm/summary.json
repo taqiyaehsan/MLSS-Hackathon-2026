@@ -1,0 +1,140 @@
+{
+  "task": "fmnist_mlp_hpo",
+  "dataset": "fmnist",
+  "dataset_desc": "FashionMNIST (28x28 grayscale clothing images flattened to 784 pixel features, 10 classes)",
+  "n_features": 784,
+  "n_classes": 10,
+  "proposer": "gpt-4.1-mini",
+  "budget_units": 20.0,
+  "n_seeds": 1,
+  "seeds": [
+    0
+  ],
+  "audit_seeds": 30,
+  "baseline_config": {
+    "hidden": 16,
+    "lr": 0.01,
+    "dropout": 0.0,
+    "weight_decay": 0.0,
+    "epochs": 6,
+    "batch_size": 64,
+    "activation": "relu"
+  },
+  "sweep": [
+    {
+      "regime": "low  (full data)",
+      "eval_sd": 0.012561902968318906,
+      "fidelity": "full",
+      "train_subset": null,
+      "baseline_test_mean": 0.8161999980608622,
+      "baseline_test_std": 0.0,
+      "arms": {
+        "greedy": {
+          "n_accepted_mean": 3.0,
+          "n_accepted_std": 0.0,
+          "final_true_test_mean": 0.8361500004927317,
+          "final_true_test_std": 0.0,
+          "audit": {
+            "n_vanished_mean": 0.0,
+            "n_vanished_std": 0.0,
+            "n_kept_mean": 3.0,
+            "n_kept_std": 0.0,
+            "n_survive_mean": 3.0,
+            "n_survive_std": 0.0
+          }
+        },
+        "causal": {
+          "n_accepted_mean": 0.0,
+          "n_accepted_std": 0.0,
+          "final_true_test_mean": 0.8161999980608622,
+          "final_true_test_std": 0.0,
+          "audit": {
+            "n_vanished_mean": 0.0,
+            "n_vanished_std": 0.0,
+            "n_kept_mean": 0.0,
+            "n_kept_std": 0.0,
+            "n_survive_mean": 0.0,
+            "n_survive_std": 0.0
+          }
+        }
+      }
+    },
+    {
+      "regime": "med  (600 samples)",
+      "eval_sd": 0.024225639856735596,
+      "fidelity": "med",
+      "train_subset": 600,
+      "baseline_test_mean": 0.8161999980608622,
+      "baseline_test_std": 0.0,
+      "arms": {
+        "greedy": {
+          "n_accepted_mean": 3.0,
+          "n_accepted_std": 0.0,
+          "final_true_test_mean": 0.7944166620572408,
+          "final_true_test_std": 0.0,
+          "audit": {
+            "n_vanished_mean": 0.0,
+            "n_vanished_std": 0.0,
+            "n_kept_mean": 3.0,
+            "n_kept_std": 0.0,
+            "n_survive_mean": 3.0,
+            "n_survive_std": 0.0
+          }
+        },
+        "causal": {
+          "n_accepted_mean": 1.0,
+          "n_accepted_std": 0.0,
+          "final_true_test_mean": 0.8145833353201548,
+          "final_true_test_std": 0.0,
+          "audit": {
+            "n_vanished_mean": 0.0,
+            "n_vanished_std": 0.0,
+            "n_kept_mean": 1.0,
+            "n_kept_std": 0.0,
+            "n_survive_mean": 1.0,
+            "n_survive_std": 0.0
+          }
+        }
+      }
+    },
+    {
+      "regime": "high (150 samples)",
+      "eval_sd": 0.06064608330160896,
+      "fidelity": "high",
+      "train_subset": 150,
+      "baseline_test_mean": 0.8161999980608622,
+      "baseline_test_std": 0.0,
+      "arms": {
+        "greedy": {
+          "n_accepted_mean": 4.0,
+          "n_accepted_std": 0.0,
+          "final_true_test_mean": 0.7833999931812287,
+          "final_true_test_std": 0.0,
+          "audit": {
+            "n_vanished_mean": 0.0,
+            "n_vanished_std": 0.0,
+            "n_kept_mean": 4.0,
+            "n_kept_std": 0.0,
+            "n_survive_mean": 4.0,
+            "n_survive_std": 0.0
+          }
+        },
+        "causal": {
+          "n_accepted_mean": 2.0,
+          "n_accepted_std": 0.0,
+          "final_true_test_mean": 0.8217166682084401,
+          "final_true_test_std": 0.0,
+          "audit": {
+            "n_vanished_mean": 0.0,
+            "n_vanished_std": 0.0,
+            "n_kept_mean": 2.0,
+            "n_kept_std": 0.0,
+            "n_survive_mean": 2.0,
+            "n_survive_std": 0.0
+          }
+        }
+      }
+    }
+  ],
+  "wall_s": 287.81977105140686
+}

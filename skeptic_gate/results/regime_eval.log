@@ -1,0 +1,18 @@
+REGIME SWEEP [fashionmnist] mode=eval metric=accuracy  pool=6 methods (NO LLM)  n_seeds=8 R=200
+  fitting each method once (full data) -> per-example correctness...
+    fit idx 0: true val acc=0.7375  [0s]
+    fit idx 1: true val acc=0.8767  [8s]
+    fit idx 2: true val acc=0.9046  [25s]
+    fit idx 3: true val acc=0.5558  [48s]
+    fit idx 4: true val acc=0.9142  [118s]
+    fit idx 5: true val acc=0.9013  [46s]
+  truth (true acc) by idx: 0:0.738  1:0.877  2:0.905  3:0.556  4:0.914  5:0.901
+  level=2000   noise(std)=0.0091  greedy FP-rate=0.00 (mean 0.00)  |  causal FP-rate=0.00 (mean 0.00)  [0s]
+  level=1000   noise(std)=0.0111  greedy FP-rate=0.04 (mean 0.04)  |  causal FP-rate=0.00 (mean 0.00)  [0s]
+  level=500    noise(std)=0.0189  greedy FP-rate=0.08 (mean 0.08)  |  causal FP-rate=0.00 (mean 0.00)  [0s]
+  level=200    noise(std)=0.0314  greedy FP-rate=0.15 (mean 0.15)  |  causal FP-rate=0.02 (mean 0.02)  [0s]
+  level=100    noise(std)=0.0362  greedy FP-rate=0.12 (mean 0.12)  |  causal FP-rate=0.03 (mean 0.03)  [0s]
+  level=50     noise(std)=0.0453  greedy FP-rate=0.09 (mean 0.09)  |  causal FP-rate=0.02 (mean 0.02)  [0s]
+  level=25     noise(std)=0.0692  greedy FP-rate=0.04 (mean 0.04)  |  causal FP-rate=0.00 (mean 0.00)  [0s]
+  saved -> results/study_fashionmnist/regime_eval.json
+  saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/study_fashionmnist/regime_curve_eval.png

@@ -1,0 +1,15 @@
+== run real_greedy_b8 | arm=greedy | budget=8.0 ==
+measuring baseline ...
+baseline score = 0.1168  (177s)
+[1] REJECT       score=0.0032 best=0.1168 spent=2.00/8  :: Combine gradient ascent on forget set with gradient descent on retain 
+[2] REJECT       score=0.0007 best=0.1168 spent=3.00/8  :: Perform targeted gradient ascent on forget set combined with distillat
+[3] REJECT       score=0.0034 best=0.1168 spent=4.00/8  :: Improve unlearning by combining gradient ascent on forget set with gra
+[4] ***ACCEPT*** score=0.1625 best=0.1625 spent=5.00/8  :: Combine gradient ascent on forget set with gradient descent on retain 
+[5] REJECT       score=0.0000 best=0.1625 spent=6.00/8  :: Enhance unlearning effectiveness by increasing gradient ascent steps o
+[6] REJECT       score=0.0000 best=0.1625 spent=7.00/8  :: Enhance unlearning by increasing gradient ascent steps with adaptive s
+[7] REJECT       score=0.0055 best=0.1625 spent=8.00/8  :: Improve unlearning by adding adaptive gradient ascent step size on for
+
+== summary ==
+baseline 0.1168 -> best 0.1625 (+0.0457)
+proposals=7 accepted=1 culled=0 crashed=0 eval_calls=8
+logs: skeptic_gate/results/real_greedy_b8/results.jsonl

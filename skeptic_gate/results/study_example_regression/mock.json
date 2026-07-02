@@ -1,0 +1,157 @@
+{
+  "task": "example_regression",
+  "metric": "r2",
+  "proposer": "mock proposer",
+  "n_proposals": 6,
+  "n_seeds": 6,
+  "pool_size": 7,
+  "replay": {
+    "greedy": {
+      "arm": "greedy",
+      "n_accepted": 3,
+      "n_vanished": 0,
+      "n_survive": 3,
+      "accepts": [
+        {
+          "idx": 2,
+          "prev_idx": 0,
+          "apparent": 0.4496416449546814,
+          "true_after": 0.4816330671310425,
+          "true_before": 0.42760594685872394,
+          "true_gain": 0.05402712027231854,
+          "survives": true
+        },
+        {
+          "idx": 3,
+          "prev_idx": 2,
+          "apparent": 0.46859949827194214,
+          "true_after": 0.4930025239785512,
+          "true_before": 0.4816330671310425,
+          "true_gain": 0.01136945684750873,
+          "survives": true
+        },
+        {
+          "idx": 4,
+          "prev_idx": 3,
+          "apparent": 0.47183120250701904,
+          "true_after": 0.4940582017103831,
+          "true_before": 0.4930025239785512,
+          "true_gain": 0.0010556777318319055,
+          "survives": true
+        }
+      ]
+    },
+    "causal": {
+      "arm": "causal",
+      "n_accepted": 3,
+      "n_vanished": 0,
+      "n_survive": 3,
+      "accepts": [
+        {
+          "idx": 2,
+          "prev_idx": 0,
+          "apparent": 0.44184401631355286,
+          "true_after": 0.4816330671310425,
+          "true_before": 0.42760594685872394,
+          "true_gain": 0.05402712027231854,
+          "survives": true
+        },
+        {
+          "idx": 3,
+          "prev_idx": 2,
+          "apparent": 0.47234371304512024,
+          "true_after": 0.4930025239785512,
+          "true_before": 0.4816330671310425,
+          "true_gain": 0.01136945684750873,
+          "survives": true
+        },
+        {
+          "idx": 4,
+          "prev_idx": 3,
+          "apparent": 0.4841598669687907,
+          "true_after": 0.4940582017103831,
+          "true_before": 0.4930025239785512,
+          "true_gain": 0.0010556777318319055,
+          "survives": true
+        }
+      ]
+    }
+  },
+  "frontier_idx": [
+    0,
+    4
+  ],
+  "methods": [
+    {
+      "idx": 0,
+      "intent": "baseline",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.01)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.42760594685872394,
+      "stability": 0.0064487552351942265,
+      "test": 0.2870105504989624,
+      "wall_ms": 3.657698631286621,
+      "flops": 211200
+    },
+    {
+      "idx": 1,
+      "intent": "[mock] set lr=0.1347",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1347)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.45200016101201373,
+      "stability": 0.07830858028773127,
+      "test": 0.23523783683776855,
+      "wall_ms": 4.067540168762207,
+      "flops": 211200
+    },
+    {
+      "idx": 2,
+      "intent": "[mock] set lr=0.0686",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.0686)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.4816330671310425,
+      "stability": 0.031873103667928115,
+      "test": 0.3289322257041931,
+      "wall_ms": 3.934502601623535,
+      "flops": 211200
+    },
+    {
+      "idx": 3,
+      "intent": "[mock] set lr=0.0274",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.0274)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.4930025239785512,
+      "stability": 0.016560260134183647,
+      "test": 0.34253036975860596,
+      "wall_ms": 3.961920738220215,
+      "flops": 211200
+    },
+    {
+      "idx": 4,
+      "intent": "[mock] set lr=0.023",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.023)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.4940582017103831,
+      "stability": 0.014682894974102353,
+      "test": 0.3442281484603882,
+      "wall_ms": 3.8874149322509766,
+      "flops": 211200
+    },
+    {
+      "idx": 5,
+      "intent": "[mock] set lr=0.1664",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1664)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.4327794015407562,
+      "stability": 0.10647880598982955,
+      "test": 0.16582322120666504,
+      "wall_ms": 3.861069679260254,
+      "flops": 211200
+    },
+    {
+      "idx": 6,
+      "intent": "[mock] set lr=0.1843",
+      "code": "\"\"\"PRIMARY CODE for the regression EXAMPLE task (sklearn diabetes) -- the working\nbaseline the agent edits. This is a TEMPLATE showing the pipeline handles\nregression: predict() returns continuous values and the harness scores with R^2.\n\nA deliberately mediocre linear-regression baseline. Headroom: an MLP,\nnonlinearities, normalization, regularization, more epochs.\n\nHarness contract:\n  * fit(X, y, seed): X is float (N, 10); y is float (N,) continuous target.\n    Seed ALL randomness.\n  * predict(X): return CONTINUOUS predictions, shape (N,).\n  * CPU only. No file/network access. Harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 1).to(DEVICE)          # linear regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1843)\n        loss_fn = nn.MSELoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(20):\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 64):\n                idx = perm[i:i + 64]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]).reshape(-1), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).reshape(-1)             # continuous predictions\n",
+      "acc": 0.41937599579493207,
+      "stability": 0.11938206245333954,
+      "test": 0.1280614733695984,
+      "wall_ms": 3.8830041885375977,
+      "flops": 211200
+    }
+  ],
+  "wall_s": 11.589487075805664
+}

@@ -1,0 +1,24 @@
+==============================================================================
+REAL TASK [fmnist]: MLP hyperparameter search on FashionMNIST (28x28 grayscale clothing images flattened to 784 pixel features, 10 classes)
+Same gates.py as the synthetic; eval REALLY trains a model. 5 outer seeds.
+==============================================================================
+
+Baseline config: {'hidden': 16, 'lr': 0.01, 'dropout': 0.0, 'weight_decay': 0.0, 'epochs': 6, 'batch_size': 64, 'activation': 'relu'}
+
+noise regime          eval sd |   greedy acc / false / test |   causal acc / false / test
+------------------------------------------------------------------------------------------
+low  (full data)       0.0126 |  3.2 / 0.6 /0.823+-0.010 |  0.2 / 0.0 /0.816+-0.000
+med  (600 samples)     0.0242 |  3.2 / 1.4 /0.806+-0.018 |  1.8 / 0.6 /0.806+-0.008
+high (150 samples)     0.0606 |  6.8 / 2.0 /0.778+-0.043 |  1.6 / 0.6 /0.807+-0.011
+
+------------------------------------------------------------------------------
+REPLICATION AUDIT @ high (150 samples) regime (mean over 5 seeds):
+  greedy: kept 6.8 'wins', 2.0 VANISH on re-test (4.8 survive)
+  causal: kept 1.6 'wins', 0.6 vanish (1.0 survive)
+
+==============================================================================
+READING: as real eval noise rises (less data), greedy accepts more
+lucky wins that VANISH on re-test; the causal gate holds the line.
+==============================================================================
+
+Saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/hpo_fmnist/summary.json   (wall 265.1s)

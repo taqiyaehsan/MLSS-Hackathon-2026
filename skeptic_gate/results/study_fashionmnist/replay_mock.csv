@@ -1,0 +1,4 @@
+task,arm,n_accepted,n_vanished,n_survive,accept_idx,prev_idx,apparent,true_before,true_after,true_gain,survives
+fashionmnist,greedy,2,1,1,1,0,0.769583,0.748750,0.768889,0.020139,1
+fashionmnist,greedy,2,1,1,2,1,0.777500,0.768889,0.760000,-0.008889,0
+fashionmnist,causal,1,0,1,1,0,0.768958,0.748750,0.768889,0.020139,1

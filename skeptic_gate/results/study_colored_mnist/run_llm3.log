@@ -1,0 +1,37 @@
+================================================================================
+STUDY [colored_mnist]  metric=accuracy  proposer=LLM agent (gpt-4.1-mini)
+================================================================================
+1) agent writes methods (recording every coherent one)...
+    step 0: ACCEPT (causal_clears_band, 2 seeds) mean=0.8795  Replace the linear model with a small convolutiona
+    step 1: reject (causal_below_band, 2 seeds) mean=0.8730  Enhance the CNN by adding batch normalization, inc
+    step 2: reject (causal_below_band, 2 seeds) mean=0.8615  Improve the CNN by fixing normalization to use tra
+    step 3: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Add data augmentation with random affine transform
+    step 4: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Add data augmentation with random affine transform
+    step 5: reject (causal_below_band, 2 seeds) mean=0.8545  Add lightweight data augmentation with random hori
+    step 6: reject (causal_below_band, 2 seeds) mean=0.8725  Improve generalization by fixing normalization to 
+    step 7: reject (causal_below_band, 2 seeds) mean=0.8620  Improve generalization and accuracy by using fixed
+   pool = 9 methods (incl. baseline)
+2) scoring matrix over 5 seeds (val) + test + FLOPs...
+    [score_matrix] idx 4 crashed: AttributeError: module 'torch' has no attribute 'radians'
+    [score_matrix] idx 5 crashed: AttributeError: module 'torch' has no attribute 'radians'
+3) replaying SAME gates (greedy vs causal) over identical candidates...
+
+  --- replay (scientifically-legit paired ablation) ---
+  greedy : accepted 1, VANISH on re-test 0, survive 1
+  causal : accepted 1, VANISH on re-test 0, survive 1
+
+  --- PARETO FRONTIER over the methods the agent wrote (no auto-pick) ---
+  idx   acc(val)    stab    GFLOPs  wall(ms)    test  method
+ *  1     0.8764  0.0030    207.75      4550  0.1300  Replace the linear model with a small conv
+    2     0.8722  0.0054    776.77      8551  0.1490  Enhance the CNN by adding batch normalizat
+    3     0.8636  0.0073   1165.16     12806  0.1690  Improve the CNN by fixing normalization to
+    8     0.8594  0.0200   1165.16     12859  0.1710  Improve generalization and accuracy by usi
+    6     0.8532  0.0162   1165.16     12851  0.2100  Add lightweight data augmentation with ran
+    7     0.8506  0.0215   1165.16     12861  0.3290  Improve generalization by fixing normaliza
+ *  0     0.6066  0.0517      0.11        18  0.5810  baseline
+    4 -1000000.0000  0.0000     -0.00         0 -1000000.0000  Add data augmentation with random affine t
+    5 -1000000.0000  0.0000     -0.00         0 -1000000.0000  Add data augmentation with random affine t
+  (* = on frontier; 2 of 9 methods non-dominated)
+  csv  -> methods_llm.csv, replay_llm.csv
+
+  saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/study_colored_mnist  (wall 983.4s)

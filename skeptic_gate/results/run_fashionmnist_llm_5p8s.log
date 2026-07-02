@@ -1,0 +1,28 @@
+================================================================================
+STUDY [fashionmnist]  metric=accuracy  proposer=LLM agent (gpt-4.1-mini)
+================================================================================
+1) agent writes methods (recording every coherent one)...
+    step 0: ACCEPT score=0.8679  Replace the linear model with a small CNN, use Adam optimize
+    step 1: ACCEPT score=0.9058  Add batch normalization, dropout, increase model capacity sl
+    step 2: reject score=0.5617  Enhance model generalization and robustness by adding light 
+    step 3: reject score=-1000000.0000  Improve generalization and robustness by adding MixUp data a
+    step 4: reject score=0.9054  Replace BatchNorm with GroupNorm for stability on small batc
+   pool = 6 methods (incl. baseline)
+2) scoring matrix over 8 seeds (val) + test + FLOPs...
+3) replaying SAME gates (greedy vs causal) over identical candidates...
+
+  --- replay (scientifically-legit paired ablation) ---
+  greedy : accepted 3, VANISH on re-test 0, survive 3
+  causal : accepted 3, VANISH on re-test 0, survive 3
+
+  --- PARETO FRONTIER over the methods the agent wrote (no auto-pick) ---
+  idx   acc(val)    stab    GFLOPs  wall(ms)    test  method
+ *  4     0.9139  0.0041  15556.05     63299  0.8988  Improve generalization and robustness by a
+ *  2     0.9050  0.0029   2159.60     15284  0.8871  Add batch normalization, dropout, increase
+ *  5     0.9041  0.0010   6000.09     27511  0.8846  Replace BatchNorm with GroupNorm for stabi
+ *  1     0.8711  0.0094    466.31      6333  0.8583  Replace the linear model with a small CNN,
+ *  0     0.7406  0.0171      0.68        20  0.7492  baseline
+    3     0.5747  0.0202   6195.59     29766  0.5583  Enhance model generalization and robustnes
+  (* = on frontier; 5 of 6 methods non-dominated)
+
+  saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/study_fashionmnist  (wall 1708.6s)

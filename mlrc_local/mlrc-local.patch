@@ -1,0 +1,77 @@
+diff --git a/MLAgentBench/benchmarks_base/machine_unlearning/env/evaluation.py b/MLAgentBench/benchmarks_base/machine_unlearning/env/evaluation.py
+index dcf3858bb..b54004d78 100644
+--- a/MLAgentBench/benchmarks_base/machine_unlearning/env/evaluation.py
++++ b/MLAgentBench/benchmarks_base/machine_unlearning/env/evaluation.py
+@@ -30,16 +30,21 @@ from load_cifar_script import get_cifar10_data, get_cifar10_pretrained_models
+ from notebook_utils import method_to_notebook_code
+ 
+ # Constants
+-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+-NUM_MODELS = 10  # Number of models for evaluation 
++DEVICE = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
++NUM_MODELS = int(os.environ.get("MU_NUM_MODELS", "10"))  # cost lever: fewer models = cheaper, noisier eval
+ COMPETITION_NAME = "neurips-2023-machine-unlearning"
+ 
+-# Check and initialize Kaggle API
+-if not os.path.exists(os.path.expanduser('~/.kaggle/kaggle.json')):
+-    raise RuntimeError('Kaggle API token not found. Please generate token from Kaggle account settings and place at ~/.kaggle/kaggle.json')
++# Kaggle API is only needed for the test phase (pushing a kernel). Authenticate
++# lazily so the CIFAR-10 dev phase can run without Kaggle credentials, and so the
++# new-style token (~/.kaggle/access_token or KAGGLE_API_TOKEN) is supported.
++api = None
+ 
+-api = KaggleApi()
+-api.authenticate()
++def _get_api():
++    global api
++    if api is None:
++        api = KaggleApi()
++        api.authenticate()
++    return api
+ 
+ def evaluate_model(method, phase: str = "dev"):
+     """Evaluate an unlearning method.
+@@ -416,7 +421,7 @@ def update_metadata(target_file, new_notebook_name):
+         target_metadata = json.load(f)
+     
+     # Get username from already authenticated API
+-    username = api.get_config_value('username')
++    username = _get_api().get_config_value('username')
+ 
+     # Update fields
+     target_metadata.update({
+diff --git a/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/BaseMethod.py b/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/BaseMethod.py
+index ac4e2c34c..135dcf285 100644
+--- a/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/BaseMethod.py
++++ b/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/BaseMethod.py
+@@ -1,7 +1,7 @@
+ from copy import deepcopy
+ import torch
+ 
+-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
++DEVICE = 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
+ 
+ class BaseMethod(object):
+     def __init__(self, name):
+diff --git a/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/MyMethod.py b/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/MyMethod.py
+index 2def5bc4e..427530456 100644
+--- a/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/MyMethod.py
++++ b/MLAgentBench/benchmarks_base/machine_unlearning/env/methods/MyMethod.py
+@@ -3,7 +3,7 @@ import torch
+ from torch import nn, optim
+ from methods.BaseMethod import BaseMethod
+ 
+-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
++DEVICE = 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
+ 
+ class MyMethod(BaseMethod):
+     def __init__(self, name):
+@@ -23,7 +23,7 @@ class MyMethod(BaseMethod):
+         """ 
+         epochs = 1
+         criterion = nn.CrossEntropyLoss()
+-        optimizer = optim.SGD(net.parameters(), lr=0.001,
++        optimizer = optim.SGD(net.parameters(), lr=0.00917,
+                           momentum=0.9, weight_decay=5e-4)
+         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+             optimizer, T_max=epochs)

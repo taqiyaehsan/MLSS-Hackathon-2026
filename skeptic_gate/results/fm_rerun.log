@@ -1,0 +1,62 @@
+=== FASHIONMNIST STUDY (rerun, bug fixed) ===
+================================================================================
+STUDY [fashionmnist]  metric=accuracy  proposer=LLM agent (gpt-4.1-mini)
+================================================================================
+1) agent writes methods (recording every coherent one)...
+    step 0: ACCEPT (causal_clears_band, 2 seeds) mean=0.8873  Improve FashionMNIST accuracy by using a small CNN
+    step 1: ACCEPT (causal_clears_band, 2 seeds) mean=0.8917  Improve FashionMNIST accuracy by adding data augme
+    step 2: reject (causal_below_band, 2 seeds) mean=0.8590  Improve FashionMNIST accuracy by adding LeakyReLU,
+    step 3: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Improve FashionMNIST accuracy by adding a lightwei
+    step 4: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Improve FashionMNIST accuracy by adding a third co
+    step 5: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Improve FashionMNIST accuracy by adding MixUp augm
+    step 6: ACCEPT (causal_clears_band, 2 seeds) mean=0.8948  Improve FashionMNIST accuracy by adding label smoo
+    step 7: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Improve FashionMNIST accuracy by adding MixUp augm
+   pool = 9 methods (incl. baseline)
+2) scoring matrix over 5 seeds (val) + test + FLOPs...
+    [score_matrix] idx 4 crashed: AttributeError: 'float' object has no attribute 'item'
+    [score_matrix] idx 5 crashed: TypeError: Distribution.sample() got an unexpected keyword argument 'generator'
+    [score_matrix] idx 6 crashed: TypeError: Distribution.sample() got an unexpected keyword argument 'generator'
+3) replaying SAME gates (greedy vs causal) over identical candidates...
+
+  --- replay (scientifically-legit paired ablation) ---
+  greedy : accepted 3, VANISH on re-test 0, survive 3
+  causal : accepted 3, VANISH on re-test 0, survive 3
+
+  --- PARETO FRONTIER over the methods the agent wrote (no auto-pick) ---
+  idx   acc(val)    stab    GFLOPs  wall(ms)    test  method
+ *  8     0.8958  0.0053  85513.61    225922  0.8875  Improve FashionMNIST accuracy by adding Mi
+ *  2     0.8938  0.0023   2960.44     18221  0.8708  Improve FashionMNIST accuracy by adding da
+    7     0.8921  0.0063   6195.59     27745  0.8733  Improve FashionMNIST accuracy by adding la
+ *  1     0.8837  0.0083    509.94      7200  0.8758  Improve FashionMNIST accuracy by using a s
+    3     0.8520  0.0132   3947.25     24322  0.8408  Improve FashionMNIST accuracy by adding Le
+ *  0     0.7369  0.0209      0.68        20  0.7492  baseline
+ *  4 -1000000.0000  0.0000     -0.00         0 -1000000.0000  Improve FashionMNIST accuracy by adding a 
+ *  5 -1000000.0000  0.0000     -0.00         0 -1000000.0000  Improve FashionMNIST accuracy by adding a 
+ *  6 -1000000.0000  0.0000     -0.00         0 -1000000.0000  Improve FashionMNIST accuracy by adding Mi
+  (* = on frontier; 7 of 9 methods non-dominated)
+  csv  -> methods_llm.csv, replay_llm.csv
+
+  saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/study_fashionmnist  (wall 3201.1s)
+=== FASHIONMNIST REGIME ===
+REGIME SWEEP [fashionmnist] mode=eval metric=accuracy  pool=9 methods (NO LLM)  n_seeds=8 R=200
+  fitting each method once (full data) -> per-example correctness...
+    fit idx 0: true val acc=0.7375  [0s]
+    fit idx 1: true val acc=0.8938  [10s]
+    fit idx 2: true val acc=0.8938  [29s]
+    fit idx 3: true val acc=0.8629  [38s]
+    fit idx 4: true val acc=0.0000  [19s]
+    fit idx 5: true val acc=0.0000  [0s]
+    fit idx 6: true val acc=0.0000  [0s]
+    fit idx 7: true val acc=0.9021  [49s]
+    fit idx 8: true val acc=0.9033  [801s]
+  truth (true acc) by idx: 0:0.738  1:0.894  2:0.894  3:0.863  4:0.000  5:0.000  6:0.000  7:0.902  8:0.903
+  level=2000   noise(std)=0.0044  greedy FP-rate=0.45 (mean 0.45)  |  causal FP-rate=0.32 (mean 0.32)  [0s]
+  level=1000   noise(std)=0.0058  greedy FP-rate=0.49 (mean 0.49)  |  causal FP-rate=0.24 (mean 0.24)  [0s]
+  level=500    noise(std)=0.0089  greedy FP-rate=0.45 (mean 0.45)  |  causal FP-rate=0.21 (mean 0.21)  [0s]
+  level=200    noise(std)=0.0171  greedy FP-rate=0.42 (mean 0.42)  |  causal FP-rate=0.27 (mean 0.27)  [0s]
+  level=100    noise(std)=0.0209  greedy FP-rate=0.43 (mean 0.46)  |  causal FP-rate=0.28 (mean 0.28)  [0s]
+  level=50     noise(std)=0.0229  greedy FP-rate=0.40 (mean 0.41)  |  causal FP-rate=0.29 (mean 0.30)  [0s]
+  level=25     noise(std)=0.0324  greedy FP-rate=0.38 (mean 0.40)  |  causal FP-rate=0.26 (mean 0.26)  [0s]
+  saved -> results/study_fashionmnist/regime_eval.json + .csv
+  saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/study_fashionmnist/regime_curve_eval.png
+=== DONE ===

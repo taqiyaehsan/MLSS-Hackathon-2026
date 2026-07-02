@@ -1,0 +1,14 @@
+================================================================================
+STUDY [colored_mnist]  metric=accuracy  proposer=LLM agent (gpt-4.1-mini)
+================================================================================
+1) agent writes methods (recording every coherent one)...
+    step 0: ACCEPT (causal_clears_band, 2 seeds) mean=0.9637  Replace the linear model with a small convolutiona
+    step 1: reject (causal_below_band, 2 seeds) mean=0.9370  Add lightweight data augmentation, reduce learning
+    step 2: ACCEPT (causal_clears_band, 2 seeds) mean=0.9750  Improve the CNN by adding dropout for regularizati
+    step 3: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Enhance the CNN by adding residual connections, in
+    step 4: ACCEPT (causal_clears_band, 2 seeds) mean=0.9857  Enhance the CNN with a third convolutional layer, 
+    step 5: reject (causal_below_band, 2 seeds) mean=0.9750  Improve the CNN by adding label smoothing, increas
+    step 6: ACCEPT (causal_clears_band, 2 seeds) mean=0.9880  Add stochastic depth and label smoothing to improv
+    step 7: reject (causal_zero_noise, 2 seeds) mean=-1000000.0000  Add MixUp data augmentation during training, combi
+   pool = 9 methods (incl. baseline)
+2) scoring matrix over 5 seeds (val) + test + FLOPs...

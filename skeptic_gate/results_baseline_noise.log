@@ -1,0 +1,13 @@
+== baseline noise: 8 fresh evals | run baseline_noise_n8 ==
+[1/8] score=0.1167  fq=0.1163  RAU/RAR=1.0026  TAU/TAR=1.001  (178s)
+[2/8] score=0.1160  fq=0.1156  RAU/RAR=1.0026  TAU/TAR=1.001  (177s)
+[3/8] score=0.1165  fq=0.1161  RAU/RAR=1.0026  TAU/TAR=1.001  (179s)
+[4/8] score=0.1170  fq=0.1166  RAU/RAR=1.0026  TAU/TAR=1.001  (178s)
+[5/8] score=0.1172  fq=0.1168  RAU/RAR=1.0026  TAU/TAR=1.001  (621s)
+[6/8] score=0.1166  fq=0.1162  RAU/RAR=1.0026  TAU/TAR=1.001  (185s)
+[7/8] score=0.1172  fq=0.1168  RAU/RAR=1.0026  TAU/TAR=1.001  (181s)
+[8/8] score=0.1167  fq=0.1162  RAU/RAR=1.0026  TAU/TAR=1.001  (178s)
+
+== summary ==
+mean=0.1168  std=0.0004  min=0.1160  max=0.1172  range=0.0012  CV=0.3%
+logs: skeptic_gate/results/baseline_noise_n8/evals.jsonl

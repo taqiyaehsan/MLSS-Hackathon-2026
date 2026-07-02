@@ -1,0 +1,23 @@
+REGIME SWEEP [colored_mnist] mode=eval metric=accuracy  pool=9 methods (NO LLM)  n_seeds=8 R=200
+  fitting each method once (full data) -> per-example correctness...
+    fit idx 0: true val acc=0.8267  [0s]
+    fit idx 1: true val acc=0.9767  [14s]
+    fit idx 2: true val acc=0.9560  [20s]
+    fit idx 3: true val acc=0.0000  [0s]
+    fit idx 4: true val acc=0.9833  [21s]
+    fit idx 5: true val acc=0.0000  [0s]
+    fit idx 6: true val acc=0.9807  [32s]
+/Users/taqiya/Documents/MLSS-agents-for-science/.venv/lib/python3.13/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+    fit idx 7: true val acc=0.0000  [0s]
+    fit idx 8: true val acc=0.9880  [45s]
+  truth (true acc) by idx: 0:0.827  1:0.977  2:0.956  3:0.000  4:0.983  5:0.000  6:0.981  7:0.000  8:0.988
+  level=2000   noise(std)=0.0020  greedy FP-rate=0.14 (mean 0.14)  |  causal FP-rate=0.01 (mean 0.01)  [0s]
+  level=1000   noise(std)=0.0023  greedy FP-rate=0.18 (mean 0.18)  |  causal FP-rate=0.04 (mean 0.04)  [0s]
+  level=500    noise(std)=0.0033  greedy FP-rate=0.21 (mean 0.21)  |  causal FP-rate=0.04 (mean 0.04)  [0s]
+  level=200    noise(std)=0.0064  greedy FP-rate=0.14 (mean 0.15)  |  causal FP-rate=0.04 (mean 0.04)  [0s]
+  level=100    noise(std)=0.0078  greedy FP-rate=0.14 (mean 0.14)  |  causal FP-rate=0.05 (mean 0.05)  [0s]
+  level=50     noise(std)=0.0100  greedy FP-rate=0.14 (mean 0.14)  |  causal FP-rate=0.07 (mean 0.07)  [0s]
+  level=25     noise(std)=0.0085  greedy FP-rate=0.14 (mean 0.14)  |  causal FP-rate=0.07 (mean 0.07)  [0s]
+  saved -> results/study_colored_mnist/regime_eval.json + .csv
+  saved -> /Users/taqiya/Documents/MLSS-agents-for-science/skeptic_gate/results/study_colored_mnist/regime_curve_eval.png

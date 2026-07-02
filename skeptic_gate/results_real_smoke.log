@@ -1,0 +1,9 @@
+== run real_smoke_greedy | arm=greedy | budget=2.0 ==
+measuring baseline ...
+baseline score = 0.1170  (180s)
+[1] REJECT       score=0.0101 best=0.1170 spent=2.00/2  :: Improve unlearning by combining gradient ascent on forget set with gra
+
+== summary ==
+baseline 0.1170 -> best 0.1170 (+0.0000)
+proposals=1 accepted=0 culled=0 crashed=0 eval_calls=2
+logs: skeptic_gate/results/real_smoke_greedy/results.jsonl

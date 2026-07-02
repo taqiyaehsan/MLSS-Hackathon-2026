@@ -1,0 +1,12 @@
+{
+  "run_id": "real_smoke_greedy",
+  "arm": "greedy",
+  "policy": "greedy",
+  "budget": 2.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 0,
+  "mock_llm": false,
+  "mock_eval": false,
+  "started": "2026-06-20T16:42:54.723568+00:00"
+}

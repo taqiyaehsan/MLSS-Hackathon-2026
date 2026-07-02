@@ -1,0 +1,5 @@
+task,idx,intent,metric,acc_val_mean,stability_std,test,flops,gflops,wall_ms,on_frontier
+fashionmnist,1,[mock] set lr=0.1347,accuracy,0.768889,0.000636,0.725000,677376000,0.6774,20.0,1
+fashionmnist,2,[mock] set lr=0.0686,accuracy,0.760000,0.015833,0.762917,677376000,0.6774,20.0,0
+fashionmnist,0,baseline,accuracy,0.748750,0.012583,0.749167,677376000,0.6774,20.8,0
+fashionmnist,3,[mock] set lr=0.0274,accuracy,0.720139,0.010478,0.725417,677376000,0.6774,20.2,0

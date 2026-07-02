@@ -1,0 +1,150 @@
+{
+  "meta": {
+    "sigma": 0.08,
+    "p_good": 0.25,
+    "ceiling": 0.5,
+    "budget": 120.0,
+    "n_outer": 20,
+    "R": 20,
+    "z": 1.0
+  },
+  "kept": 114,
+  "survive_replication": 42,
+  "survive_truth": 76,
+  "vanish_replication": 72,
+  "frac_vanish_replication": 0.631578947368421,
+  "by_kind": {
+    "null": {
+      "kept": 60,
+      "surv_rep": 9,
+      "surv_truth": 22
+    },
+    "good": {
+      "kept": 54,
+      "surv_rep": 33,
+      "surv_truth": 54
+    }
+  },
+  "per_seed": [
+    {
+      "seed": 0,
+      "kept": 9,
+      "surv_rep": 3,
+      "surv_truth": 6
+    },
+    {
+      "seed": 1,
+      "kept": 6,
+      "surv_rep": 4,
+      "surv_truth": 5
+    },
+    {
+      "seed": 2,
+      "kept": 6,
+      "surv_rep": 2,
+      "surv_truth": 4
+    },
+    {
+      "seed": 3,
+      "kept": 4,
+      "surv_rep": 0,
+      "surv_truth": 1
+    },
+    {
+      "seed": 4,
+      "kept": 9,
+      "surv_rep": 1,
+      "surv_truth": 7
+    },
+    {
+      "seed": 5,
+      "kept": 4,
+      "surv_rep": 0,
+      "surv_truth": 3
+    },
+    {
+      "seed": 6,
+      "kept": 4,
+      "surv_rep": 1,
+      "surv_truth": 2
+    },
+    {
+      "seed": 7,
+      "kept": 6,
+      "surv_rep": 2,
+      "surv_truth": 4
+    },
+    {
+      "seed": 8,
+      "kept": 6,
+      "surv_rep": 2,
+      "surv_truth": 3
+    },
+    {
+      "seed": 9,
+      "kept": 8,
+      "surv_rep": 4,
+      "surv_truth": 6
+    },
+    {
+      "seed": 10,
+      "kept": 4,
+      "surv_rep": 3,
+      "surv_truth": 4
+    },
+    {
+      "seed": 11,
+      "kept": 4,
+      "surv_rep": 1,
+      "surv_truth": 1
+    },
+    {
+      "seed": 12,
+      "kept": 7,
+      "surv_rep": 4,
+      "surv_truth": 5
+    },
+    {
+      "seed": 13,
+      "kept": 8,
+      "surv_rep": 4,
+      "surv_truth": 8
+    },
+    {
+      "seed": 14,
+      "kept": 4,
+      "surv_rep": 1,
+      "surv_truth": 3
+    },
+    {
+      "seed": 15,
+      "kept": 4,
+      "surv_rep": 1,
+      "surv_truth": 2
+    },
+    {
+      "seed": 16,
+      "kept": 4,
+      "surv_rep": 1,
+      "surv_truth": 2
+    },
+    {
+      "seed": 17,
+      "kept": 6,
+      "surv_rep": 2,
+      "surv_truth": 2
+    },
+    {
+      "seed": 18,
+      "kept": 5,
+      "surv_rep": 3,
+      "surv_truth": 4
+    },
+    {
+      "seed": 19,
+      "kept": 6,
+      "surv_rep": 3,
+      "surv_truth": 4
+    }
+  ]
+}

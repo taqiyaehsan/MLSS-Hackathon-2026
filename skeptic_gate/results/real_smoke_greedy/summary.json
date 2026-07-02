@@ -1,0 +1,22 @@
+{
+  "run_id": "real_smoke_greedy",
+  "arm": "greedy",
+  "policy": "greedy",
+  "budget": 2.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 0,
+  "mock_llm": false,
+  "mock_eval": false,
+  "started": "2026-06-20T16:42:54.723568+00:00",
+  "finished": "2026-06-20T16:54:09.879217+00:00",
+  "baseline_score": 0.11698467453515403,
+  "best_score": 0.11698467453515403,
+  "improvement": 0.0,
+  "n_proposals": 1,
+  "n_accepted": 0,
+  "n_culled": 0,
+  "n_crashed": 0,
+  "eval_calls": 2,
+  "budget_spent": 2.0
+}

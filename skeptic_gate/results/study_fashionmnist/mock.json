@@ -1,0 +1,99 @@
+{
+  "task": "fashionmnist",
+  "metric": "accuracy",
+  "proposer": "mock proposer",
+  "n_proposals": 3,
+  "n_seeds": 3,
+  "pool_size": 4,
+  "replay": {
+    "greedy": {
+      "arm": "greedy",
+      "n_accepted": 2,
+      "n_vanished": 1,
+      "n_survive": 1,
+      "accepts": [
+        {
+          "idx": 1,
+          "prev_idx": 0,
+          "apparent": 0.7695833444595337,
+          "true_after": 0.7688888907432556,
+          "true_before": 0.7487499912579855,
+          "true_gain": 0.020138899485270145,
+          "survives": true
+        },
+        {
+          "idx": 2,
+          "prev_idx": 1,
+          "apparent": 0.7774999737739563,
+          "true_after": 0.7599999904632568,
+          "true_before": 0.7688888907432556,
+          "true_gain": -0.00888890027999878,
+          "survives": false
+        }
+      ]
+    },
+    "causal": {
+      "arm": "causal",
+      "n_accepted": 1,
+      "n_vanished": 0,
+      "n_survive": 1,
+      "accepts": [
+        {
+          "idx": 1,
+          "prev_idx": 0,
+          "apparent": 0.768958330154419,
+          "true_after": 0.7688888907432556,
+          "true_before": 0.7487499912579855,
+          "true_gain": 0.020138899485270145,
+          "survives": true
+        }
+      ]
+    }
+  },
+  "frontier_idx": [
+    1
+  ],
+  "methods": [
+    {
+      "idx": 0,
+      "intent": "baseline",
+      "code": "\"\"\"PRIMARY CODE for the FashionMNIST task -- the working baseline the agent edits.\n\nThis is a deliberately mediocre linear (softmax) classifier on flattened pixels:\nit really trains and scores, but leaves obvious headroom (a CNN, an MLP, more\nepochs, normalization, augmentation, ...). The agent's job is to EDIT this file\nto raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 1, 28, 28) in [0,1]; y is long (N,).\n    Train a model. Seed ALL randomness from `seed`.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, c, h, w = X.shape\n        self.model = nn.Linear(c * h * w, 10).to(DEVICE)\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.05)\n        loss_fn = nn.CrossEntropyLoss()\n        Xf = X.reshape(n, -1)\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(3):                       # only 3 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss = loss_fn(self.model(Xf[idx]), y[idx])\n                loss.backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X.reshape(X.shape[0], -1)).argmax(1)\n",
+      "acc": 0.7487499912579855,
+      "stability": 0.012583076971298943,
+      "test": 0.7491666674613953,
+      "wall_ms": 20.780086517333984,
+      "flops": 677376000
+    },
+    {
+      "idx": 1,
+      "intent": "[mock] set lr=0.1347",
+      "code": "\"\"\"PRIMARY CODE for the FashionMNIST task -- the working baseline the agent edits.\n\nThis is a deliberately mediocre linear (softmax) classifier on flattened pixels:\nit really trains and scores, but leaves obvious headroom (a CNN, an MLP, more\nepochs, normalization, augmentation, ...). The agent's job is to EDIT this file\nto raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 1, 28, 28) in [0,1]; y is long (N,).\n    Train a model. Seed ALL randomness from `seed`.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, c, h, w = X.shape\n        self.model = nn.Linear(c * h * w, 10).to(DEVICE)\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1347)\n        loss_fn = nn.CrossEntropyLoss()\n        Xf = X.reshape(n, -1)\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(3):                       # only 3 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss = loss_fn(self.model(Xf[idx]), y[idx])\n                loss.backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X.reshape(X.shape[0], -1)).argmax(1)\n",
+      "acc": 0.7688888907432556,
+      "stability": 0.0006364812464371586,
+      "test": 0.7250000238418579,
+      "wall_ms": 19.999027252197266,
+      "flops": 677376000
+    },
+    {
+      "idx": 2,
+      "intent": "[mock] set lr=0.0686",
+      "code": "\"\"\"PRIMARY CODE for the FashionMNIST task -- the working baseline the agent edits.\n\nThis is a deliberately mediocre linear (softmax) classifier on flattened pixels:\nit really trains and scores, but leaves obvious headroom (a CNN, an MLP, more\nepochs, normalization, augmentation, ...). The agent's job is to EDIT this file\nto raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 1, 28, 28) in [0,1]; y is long (N,).\n    Train a model. Seed ALL randomness from `seed`.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, c, h, w = X.shape\n        self.model = nn.Linear(c * h * w, 10).to(DEVICE)\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.0686)\n        loss_fn = nn.CrossEntropyLoss()\n        Xf = X.reshape(n, -1)\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(3):                       # only 3 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss = loss_fn(self.model(Xf[idx]), y[idx])\n                loss.backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X.reshape(X.shape[0], -1)).argmax(1)\n",
+      "acc": 0.7599999904632568,
+      "stability": 0.01583331823348999,
+      "test": 0.7629166841506958,
+      "wall_ms": 19.978046417236328,
+      "flops": 677376000
+    },
+    {
+      "idx": 3,
+      "intent": "[mock] set lr=0.0274",
+      "code": "\"\"\"PRIMARY CODE for the FashionMNIST task -- the working baseline the agent edits.\n\nThis is a deliberately mediocre linear (softmax) classifier on flattened pixels:\nit really trains and scores, but leaves obvious headroom (a CNN, an MLP, more\nepochs, normalization, augmentation, ...). The agent's job is to EDIT this file\nto raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 1, 28, 28) in [0,1]; y is long (N,).\n    Train a model. Seed ALL randomness from `seed`.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, c, h, w = X.shape\n        self.model = nn.Linear(c * h * w, 10).to(DEVICE)\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.0274)\n        loss_fn = nn.CrossEntropyLoss()\n        Xf = X.reshape(n, -1)\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(3):                       # only 3 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss = loss_fn(self.model(Xf[idx]), y[idx])\n                loss.backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X.reshape(X.shape[0], -1)).argmax(1)\n",
+      "acc": 0.7201388676961263,
+      "stability": 0.010477606557602914,
+      "test": 0.7254166603088379,
+      "wall_ms": 20.19524574279785,
+      "flops": 677376000
+    }
+  ],
+  "wall_s": 27.31511902809143
+}

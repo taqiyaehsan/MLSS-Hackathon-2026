@@ -1,0 +1,131 @@
+{
+  "task": "magic",
+  "metric": "accuracy",
+  "proposer": "mock proposer",
+  "n_proposals": 6,
+  "n_seeds": 6,
+  "pool_size": 7,
+  "replay": {
+    "greedy": {
+      "arm": "greedy",
+      "n_accepted": 2,
+      "n_vanished": 1,
+      "n_survive": 1,
+      "accepts": [
+        {
+          "idx": 1,
+          "prev_idx": 0,
+          "apparent": 0.8019999861717224,
+          "true_after": 0.8009166618188223,
+          "true_before": 0.7976666688919067,
+          "true_gain": 0.0032499929269155237,
+          "survives": true
+        },
+        {
+          "idx": 6,
+          "prev_idx": 1,
+          "apparent": 0.8025000095367432,
+          "true_after": 0.8002500136693319,
+          "true_before": 0.8009166618188223,
+          "true_gain": -0.0006666481494903564,
+          "survives": false
+        }
+      ]
+    },
+    "causal": {
+      "arm": "causal",
+      "n_accepted": 1,
+      "n_vanished": 0,
+      "n_survive": 1,
+      "accepts": [
+        {
+          "idx": 1,
+          "prev_idx": 0,
+          "apparent": 0.8024999797344208,
+          "true_after": 0.8009166618188223,
+          "true_before": 0.7976666688919067,
+          "true_gain": 0.0032499929269155237,
+          "survives": true
+        }
+      ]
+    }
+  },
+  "frontier_idx": [
+    1,
+    2,
+    6
+  ],
+  "methods": [
+    {
+      "idx": 0,
+      "intent": "baseline",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.05)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.7976666688919067,
+      "stability": 0.002401390664907973,
+      "test": 0.7854999899864197,
+      "wall_ms": 21.32737636566162,
+      "flops": 2400000
+    },
+    {
+      "idx": 1,
+      "intent": "[mock] set lr=0.1347",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1347)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8009166618188223,
+      "stability": 0.00247822455349845,
+      "test": 0.7854999899864197,
+      "wall_ms": 21.368980407714844,
+      "flops": 2400000
+    },
+    {
+      "idx": 2,
+      "intent": "[mock] set lr=0.0686",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.0686)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.798499991496404,
+      "stability": 0.0015811260130634225,
+      "test": 0.7860000133514404,
+      "wall_ms": 20.640015602111816,
+      "flops": 2400000
+    },
+    {
+      "idx": 3,
+      "intent": "[mock] set lr=0.0274",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.0274)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.793916662534078,
+      "stability": 0.003470101720376034,
+      "test": 0.7799999713897705,
+      "wall_ms": 21.007061004638672,
+      "flops": 2400000
+    },
+    {
+      "idx": 4,
+      "intent": "[mock] set lr=0.023",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.023)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.7914999922116598,
+      "stability": 0.0034496278064780916,
+      "test": 0.7799999713897705,
+      "wall_ms": 21.218419075012207,
+      "flops": 2400000
+    },
+    {
+      "idx": 5,
+      "intent": "[mock] set lr=0.1664",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1664)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8001666764418284,
+      "stability": 0.0027688669575299187,
+      "test": 0.7875000238418579,
+      "wall_ms": 20.51520347595215,
+      "flops": 2400000
+    },
+    {
+      "idx": 6,
+      "intent": "[mock] set lr=0.1843",
+      "code": "\"\"\"PRIMARY CODE for the MAGIC Gamma Telescope task -- the working baseline the\nagent edits.\n\nA deliberately mediocre logistic-regression baseline (a single linear layer) on\nthe 10 standardized air-shower features: it really trains and scores, but leaves\nobvious headroom (an MLP, nonlinearities, regularization, more epochs, feature\ninteractions). The agent's job is to EDIT this file to raise held-out accuracy.\n\nHarness contract (do not rely on anything outside it):\n  * fit(X, y, seed): X is a float tensor (N, 10) of standardized features; y is\n    long (N,) with 0 = gamma signal, 1 = hadron background. Seed ALL randomness.\n  * predict(X): return predicted class indices, shape (N,).\n  * CPU only. No file or network access. The harness enforces a wall-clock limit.\n\"\"\"\n\nimport torch\nimport torch.nn as nn\n\nfrom base_method import BaseMethod\n\nDEVICE = torch.device(\"cpu\")\n\n\nclass MyMethod(BaseMethod):\n    def fit(self, X, y, seed: int) -> None:\n        torch.manual_seed(seed)\n        n, d = X.shape\n        self.model = nn.Linear(d, 2).to(DEVICE)        # logistic regression\n        opt = torch.optim.SGD(self.model.parameters(), lr=0.1843)\n        loss_fn = nn.CrossEntropyLoss()\n        g = torch.Generator().manual_seed(seed)\n        self.model.train()\n        for _ in range(5):                              # only 5 epochs -> headroom\n            perm = torch.randperm(n, generator=g)\n            for i in range(0, n, 128):\n                idx = perm[i:i + 128]\n                opt.zero_grad()\n                loss_fn(self.model(X[idx]), y[idx]).backward()\n                opt.step()\n\n    def predict(self, X):\n        self.model.eval()\n        with torch.no_grad():\n            return self.model(X).argmax(1)\n",
+      "acc": 0.8002500136693319,
+      "stability": 0.002403119932269746,
+      "test": 0.7875000238418579,
+      "wall_ms": 18.141627311706543,
+      "flops": 2400000
+    }
+  ],
+  "wall_s": 13.175045728683472
+}

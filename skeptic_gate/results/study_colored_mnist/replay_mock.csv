@@ -1,0 +1,3 @@
+task,arm,n_accepted,n_vanished,n_survive,accept_idx,prev_idx,apparent,true_before,true_after,true_gain,survives
+colored_mnist,greedy,1,0,1,1,0,0.846000,0.827111,0.849333,0.022222,1
+colored_mnist,causal,1,0,1,1,0,0.847667,0.827111,0.849333,0.022222,1

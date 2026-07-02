@@ -1,0 +1,31 @@
+{
+  "task": "fashionmnist",
+  "n_seeds": 3,
+  "r_trials": 5,
+  "truth": [
+    0.7405729070305824,
+    0.87109375,
+    0.9050000011920929,
+    0.5746875032782555,
+    0.9139062538743019,
+    0.9041145816445351
+  ],
+  "points": [
+    {
+      "frac": 0.1,
+      "noise_std": 0.020208421496361116,
+      "greedy": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.9139062538743019
+      },
+      "causal": {
+        "mean_vanished": 0.0,
+        "fp_rate": 0.0,
+        "max_vanished": 0,
+        "mean_final_acc": 0.9139062538743019
+      }
+    }
+  ]
+}

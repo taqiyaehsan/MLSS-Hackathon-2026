@@ -1,33 +1,26 @@
-# cloned upstream (re-created by setup/setup.sh)
-MLRC-Bench/
-autoresearch/
-
-# environments
+# --- environments / caches (regenerable) ---
 .venv/
-venv/
-env/
-*.egg-info/
-
-# python
 __pycache__/
 *.pyc
 *.pyo
-
-# secrets
-.env
-skeptic_gate/.env
-
-# data / model checkpoints (downloaded by setup)
-*.pth
-*.npz
-*.tar.gz
-data/
-_data_fmnist/
-skeptic_gate/_data_fmnist/
-
-# local run outputs (the curated results/ at repo root ARE committed)
-skeptic_gate/results/
-skeptic_gate/results_*.log
-
-# os
 .DS_Store
+.ipynb_checkpoints/
+
+# --- secrets (NEVER commit) ---
+.env
+*/.env
+**/.env
+*.pem
+*.key
+
+# --- downloaded datasets (download=True regenerates these) ---
+skeptic_gate/_data_*/
+skeptic_gate/**/data/
+**/MNIST/
+**/cifar*/
+
+# --- external clones (huge; tracked upstream, re-cloneable) ---
+#   MLRC-Bench local modifications are preserved separately under mlrc_local/
+#   and setup/mlrc-local.patch
+MLRC-Bench/
+autoresearch/

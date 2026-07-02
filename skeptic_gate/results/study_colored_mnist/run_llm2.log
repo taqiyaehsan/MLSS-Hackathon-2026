@@ -1,0 +1,10 @@
+================================================================================
+STUDY [colored_mnist]  metric=accuracy  proposer=LLM agent (gpt-4.1-mini)
+================================================================================
+1) agent writes methods (recording every coherent one)...
+    step 0: ACCEPT (causal_clears_band, 2 seeds) mean=0.8812  Replace the linear model with a small convolutiona
+    step 1: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Improve accuracy by adding batch normalization, dr
+    step 2: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Enhance the CNN with batch normalization and dropo
+    step 3: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Add batch normalization and dropout for better reg
+    step 4: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Improve the CNN by adding batch normalization and 
+    step 5: reject (causal_below_band, 2 seeds) mean=-1000000.0000  Add batch normalization and dropout for better reg

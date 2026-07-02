@@ -1,0 +1,5 @@
+task,idx,intent,metric,acc_val_mean,stability_std,test,flops,gflops,wall_ms,on_frontier
+colored_mnist,1,[mock] set lr=0.1347,accuracy,0.849333,0.003333,0.183000,1270080000,1.2701,16.7,1
+colored_mnist,2,[mock] set lr=0.0686,accuracy,0.831778,0.002524,0.091000,1270080000,1.2701,16.6,1
+colored_mnist,0,baseline,accuracy,0.827111,0.004914,0.091500,1270080000,1.2701,16.7,0
+colored_mnist,3,[mock] set lr=0.0274,accuracy,0.816889,0.006810,0.090000,1270080000,1.2701,16.5,0

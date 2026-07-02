@@ -1,0 +1,234 @@
+{
+  "task": "fashionmnist",
+  "arm": "causal",
+  "proposer": "programmatic mutator",
+  "budget": 8.0,
+  "methods": [
+    "logreg",
+    "mlp",
+    "cnn"
+  ],
+  "frontier_seeds": 8,
+  "n_candidates": 10,
+  "frontier": [
+    {
+      "method": "logreg",
+      "config": {
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 128
+      },
+      "acc": 0.8369270786643028,
+      "acc_single": 0.8500000238418579,
+      "stability": 0.008665804945124258,
+      "cost_macs": 1016064000,
+      "wall_ms": 40.25006294250488,
+      "test_acc": 0.8149999976158142
+    },
+    {
+      "method": "mlp",
+      "config": {
+        "hidden": 32,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64,
+        "dropout": 0.0,
+        "activation": "relu"
+      },
+      "acc": 0.8397916555404663,
+      "acc_single": 0.8387500047683716,
+      "stability": 0.009786915641044778,
+      "cost_macs": 3292876800,
+      "wall_ms": 101.88007354736328,
+      "test_acc": 0.800000011920929
+    },
+    {
+      "method": "cnn",
+      "config": {
+        "channels": 16,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 5,
+        "batch_size": 64,
+        "dropout": 0.0
+      },
+      "acc": 0.8708854094147682,
+      "acc_single": 0.8683333396911621,
+      "stability": 0.006941644230518324,
+      "cost_macs": 111428352000,
+      "wall_ms": 3993.2819604873657,
+      "test_acc": 0.8575000166893005
+    }
+  ],
+  "all_rows": [
+    {
+      "method": "logreg",
+      "config": {
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64
+      },
+      "acc": 0.8333854079246521,
+      "acc_single": 0.8358333110809326,
+      "stability": 0.013701097936434524,
+      "cost_macs": 1016064000,
+      "wall_ms": 115.822434425354,
+      "test_acc": 0.8041666746139526
+    },
+    {
+      "method": "logreg",
+      "config": {
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 12,
+        "batch_size": 32
+      },
+      "acc": 0.8141666650772095,
+      "acc_single": 0.8349999785423279,
+      "stability": 0.01922609494578733,
+      "cost_macs": 2032128000,
+      "wall_ms": 415.024995803833,
+      "test_acc": 0.8233333230018616
+    },
+    {
+      "method": "logreg",
+      "config": {
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 128
+      },
+      "acc": 0.8369270786643028,
+      "acc_single": 0.8500000238418579,
+      "stability": 0.008665804945124258,
+      "cost_macs": 1016064000,
+      "wall_ms": 40.25006294250488,
+      "test_acc": 0.8149999976158142
+    },
+    {
+      "method": "logreg",
+      "config": {
+        "lr": 0.03,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64
+      },
+      "acc": 0.7914062440395355,
+      "acc_single": 0.7799999713897705,
+      "stability": 0.025570821581935476,
+      "cost_macs": 1016064000,
+      "wall_ms": 61.79094314575195,
+      "test_acc": 0.7616666555404663
+    },
+    {
+      "method": "mlp",
+      "config": {
+        "hidden": 32,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64,
+        "dropout": 0.0,
+        "activation": "relu"
+      },
+      "acc": 0.8397916555404663,
+      "acc_single": 0.8387500047683716,
+      "stability": 0.009786915641044778,
+      "cost_macs": 3292876800,
+      "wall_ms": 101.88007354736328,
+      "test_acc": 0.800000011920929
+    },
+    {
+      "method": "mlp",
+      "config": {
+        "hidden": 64,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64,
+        "dropout": 0.0,
+        "activation": "relu"
+      },
+      "acc": 0.8368229195475578,
+      "acc_single": 0.8450000286102295,
+      "stability": 0.021410964070921773,
+      "cost_macs": 6585753600,
+      "wall_ms": 112.76066303253174,
+      "test_acc": 0.8162500262260437
+    },
+    {
+      "method": "mlp",
+      "config": {
+        "hidden": 32,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64,
+        "dropout": 0.0,
+        "activation": "tanh"
+      },
+      "acc": 0.8082291558384895,
+      "acc_single": 0.8125,
+      "stability": 0.013202013190361366,
+      "cost_macs": 3292876800,
+      "wall_ms": 102.51784324645996,
+      "test_acc": 0.7770833373069763
+    },
+    {
+      "method": "mlp",
+      "config": {
+        "hidden": 32,
+        "lr": 0.03,
+        "weight_decay": 0.0,
+        "epochs": 6,
+        "batch_size": 64,
+        "dropout": 0.0,
+        "activation": "relu"
+      },
+      "acc": 0.7999999970197678,
+      "acc_single": 0.8070833086967468,
+      "stability": 0.023216105395047714,
+      "cost_macs": 3292876800,
+      "wall_ms": 101.29106044769287,
+      "test_acc": 0.7929166555404663
+    },
+    {
+      "method": "cnn",
+      "config": {
+        "channels": 16,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 5,
+        "batch_size": 64,
+        "dropout": 0.0
+      },
+      "acc": 0.8708854094147682,
+      "acc_single": 0.8683333396911621,
+      "stability": 0.006941644230518324,
+      "cost_macs": 111428352000,
+      "wall_ms": 3993.2819604873657,
+      "test_acc": 0.8575000166893005
+    },
+    {
+      "method": "cnn",
+      "config": {
+        "channels": 16,
+        "lr": 0.01,
+        "weight_decay": 0.0,
+        "epochs": 5,
+        "batch_size": 32,
+        "dropout": 0.0
+      },
+      "acc": 0.8630729094147682,
+      "acc_single": 0.8604166507720947,
+      "stability": 0.013383339012872596,
+      "cost_macs": 111428352000,
+      "wall_ms": 4110.265016555786,
+      "test_acc": 0.8550000190734863
+    }
+  ],
+  "wall_s": 153.6953408718109
+}

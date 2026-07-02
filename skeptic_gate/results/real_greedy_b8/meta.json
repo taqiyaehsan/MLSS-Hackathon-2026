@@ -1,0 +1,12 @@
+{
+  "run_id": "real_greedy_b8",
+  "arm": "greedy",
+  "policy": "greedy",
+  "budget": 8.0,
+  "model": "gpt-4.1-mini",
+  "temperature": 0.7,
+  "seed": 0,
+  "mock_llm": false,
+  "mock_eval": false,
+  "started": "2026-06-20T18:01:50.929847+00:00"
+}

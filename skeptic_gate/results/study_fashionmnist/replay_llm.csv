@@ -1,0 +1,7 @@
+task,arm,n_accepted,n_vanished,n_survive,accept_idx,prev_idx,apparent,true_before,true_after,true_gain,survives
+fashionmnist,greedy,3,0,3,1,0,0.892083,0.736917,0.883750,0.146833,1
+fashionmnist,greedy,3,0,3,7,1,0.892917,0.883750,0.892083,0.008333,1
+fashionmnist,greedy,3,0,3,8,7,0.897917,0.892083,0.895833,0.003750,1
+fashionmnist,causal,3,0,3,1,0,0.884375,0.736917,0.883750,0.146833,1
+fashionmnist,causal,3,0,3,2,1,0.894375,0.883750,0.893750,0.010000,1
+fashionmnist,causal,3,0,3,8,2,0.897812,0.893750,0.895833,0.002083,1
